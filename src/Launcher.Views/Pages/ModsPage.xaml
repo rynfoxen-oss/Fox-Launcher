@@ -286,25 +286,27 @@
                                                Style="{StaticResource MutedText}" Margin="0,6,0,0"/>
                                 </StackPanel>
                             </Border>
-                            <ListBox x:Name="InstalledList" ItemsSource="{Binding Mods}"
-                                     SelectedItem="{Binding SelectedMod, Mode=TwoWay}"
-                                     SelectionMode="Multiple"
-                                     SelectionChanged="InstalledList_SelectionChanged"
-                                     PreviewMouseWheel="OnListBoxPreviewMouseWheel"
-                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                     ScrollViewer.CanContentScroll="False"
-                                     VirtualizingPanel.IsVirtualizing="True"
-                                     VirtualizingPanel.VirtualizationMode="Recycling">
-                                <ListBox.Style>
-                                    <Style TargetType="ListBox" BasedOn="{StaticResource PlainListBox}">
-                                        <Setter Property="Visibility" Value="Visible"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Mods.Count}" Value="0">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </ListBox.Style>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="520" CanContentScroll="True">
+                                <ListBox x:Name="InstalledList" ItemsSource="{Binding Mods}"
+                                         SelectedItem="{Binding SelectedMod, Mode=TwoWay}"
+                                         SelectionMode="Multiple"
+                                         SelectionChanged="InstalledList_SelectionChanged"
+                                         PreviewMouseWheel="OnListBoxPreviewMouseWheel"
+                                         ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                         ScrollViewer.CanContentScroll="True"
+                                         VirtualizingPanel.IsVirtualizing="True"
+                                         VirtualizingPanel.VirtualizationMode="Recycling">
+                                    <ListBox.Style>
+                                        <Style TargetType="ListBox" BasedOn="{StaticResource PlainListBox}">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Mods.Count}" Value="0">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ListBox.Style>
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
                                         <Border Style="{StaticResource CardPanel}" Margin="0,0,0,10" Padding="12" CornerRadius="8">
@@ -370,7 +372,8 @@
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                             </ListBox>
-                        </Grid>
+                        </ScrollViewer>
+                    </Grid>
 
                     <!-- ===== Browse Modrinth ===== -->
                     <Grid Visibility="{Binding IsBrowseVisible, Converter={StaticResource BoolToVisibility}}">
@@ -400,22 +403,24 @@
                                                Style="{StaticResource MutedText}" Margin="0,6,0,0"/>
                                 </StackPanel>
                             </Border>
-                            <ListBox x:Name="BrowseList" ItemsSource="{Binding SearchResults}" SelectedItem="{Binding SelectedResult, Mode=TwoWay}"
-                                     PreviewMouseWheel="OnListBoxPreviewMouseWheel"
-                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                     ScrollViewer.CanContentScroll="False"
-                                     VirtualizingPanel.IsVirtualizing="True"
-                                     VirtualizingPanel.VirtualizationMode="Recycling">
-                                <ListBox.Style>
-                                    <Style TargetType="ListBox" BasedOn="{StaticResource PlainListBox}">
-                                        <Setter Property="Visibility" Value="Visible"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding SearchResults.Count}" Value="0">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </ListBox.Style>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="520" CanContentScroll="True">
+                                <ListBox x:Name="BrowseList" ItemsSource="{Binding SearchResults}" SelectedItem="{Binding SelectedResult, Mode=TwoWay}"
+                                         PreviewMouseWheel="OnListBoxPreviewMouseWheel"
+                                         ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                         ScrollViewer.CanContentScroll="True"
+                                         VirtualizingPanel.IsVirtualizing="True"
+                                         VirtualizingPanel.VirtualizationMode="Recycling">
+                                    <ListBox.Style>
+                                        <Style TargetType="ListBox" BasedOn="{StaticResource PlainListBox}">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SearchResults.Count}" Value="0">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ListBox.Style>
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
                                         <Border Style="{StaticResource CardPanel}" Margin="0,0,0,10" Padding="12">
@@ -466,6 +471,7 @@
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                             </ListBox>
+                        </ScrollViewer>
                         </Grid>
                 </Grid>
             </Grid>
