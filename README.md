@@ -2,6 +2,10 @@
 
 A modern Minecraft launcher for Windows, built with .NET 8, WPF, and MVVM. Dark-first UI with light and midnight themes, instance management, mod/resource pack/shader management, Microsoft account support, and more.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release history and recent updates.
+
 ## Features
 
 - **Instances** — create, import/export, duplicate, and run separate Minecraft instances with per-instance game version and mod loader (Vanilla, Fabric, Quilt, Forge, NeoForge)
