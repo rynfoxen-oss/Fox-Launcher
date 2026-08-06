@@ -6,20 +6,19 @@ and uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 ### Added
-- Added explicit scroll panels for the Mods page `Installed` and `Browse Modrinth` sections.
-- Improved mod browsing UX by ensuring mod lists scroll independently and consistently.
+- Added `CHANGELOG.md` and linked it from `README.md` to make release history easier to track.
 
-### Fixed
-- Fixed a WPF scroll issue in the Mods tab where mouse wheel input did not reliably scroll mod lists.
-- Updated GitHub release process verification and repository documentation.
+### Changed
+- Clarified changelog formatting and release note structure.
 
 ## [1.1.4] - 2026-08-06
 ### Added
-- Built and published the `FoxLauncher.exe` launcher binary and `Launcher.Installer.exe` installer asset.
+- Published the `FoxLauncher.exe` launcher binary and `Launcher.Installer.exe` installer asset for `v1.1.4`.
 
 ### Fixed
-- Resolved issues with mod list scrolling behavior on the Mods page.
-- Ensured `Installed` and `Browse Modrinth` sections now behave like the mod details drawer.
+- Fixed Mods page scrolling so both `Installed` and `Browse Modrinth` sections now scroll independently.
+- Resolved inconsistent mouse wheel routing inside the Mods tab, matching the behavior of the mod details drawer.
+- Improved the Modrinth browser UX by making the mod list scroll behavior reliable.
 
 ## [1.1.3] - 2026-07-28
 ### Added
