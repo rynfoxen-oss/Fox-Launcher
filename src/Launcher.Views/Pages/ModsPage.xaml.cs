@@ -15,12 +15,15 @@ public partial class ModsPage : UserControl
     {
         InitializeComponent();
         AddHandler(MouseWheelEvent, new MouseWheelEventHandler(OnPagePreviewMouseWheel), handledEventsToo: true);
+        AddHandler(UIElement.PreviewMouseWheelEvent, new MouseWheelEventHandler(OnPagePreviewMouseWheel), handledEventsToo: true);
     }
 
     private void OnPagePreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
         if (e.OriginalSource is not DependencyObject source) return;
-        if (FindVisualParent<ScrollViewer>(source) is not ScrollViewer scrollViewer) return;
+
+        var scrollViewer = GetTargetScrollViewer(source);
+        if (scrollViewer == null) return;
 
         ScrollViewerWheel(scrollViewer, e.Delta);
         e.Handled = true;
@@ -33,6 +36,14 @@ public partial class ModsPage : UserControl
 
         ScrollViewerWheel(scrollViewer, e.Delta);
         e.Handled = true;
+    }
+
+    private static ScrollViewer? GetTargetScrollViewer(DependencyObject source)
+    {
+        if (FindVisualParent<ListBox>(source) is ListBox listBox && FindVisualChild<ScrollViewer>(listBox) is ScrollViewer listScrollViewer)
+            return listScrollViewer;
+
+        return FindVisualParent<ScrollViewer>(source);
     }
 
     private static void ScrollViewerWheel(ScrollViewer scrollViewer, int delta)

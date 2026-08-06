@@ -37,6 +37,7 @@ public partial class ModInstallerWindow : Window
         VersionList.ItemsSource = _versions;
         Loaded += OnLoaded;
         AddHandler(MouseWheelEvent, new MouseWheelEventHandler(OnWindowPreviewMouseWheel), handledEventsToo: true);
+        AddHandler(UIElement.PreviewMouseWheelEvent, new MouseWheelEventHandler(OnWindowPreviewMouseWheel), handledEventsToo: true);
     }
 
     /// <summary>True when at least one mod was installed during this session.</summary>
@@ -241,7 +242,9 @@ public partial class ModInstallerWindow : Window
     private void OnWindowPreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
         if (e.OriginalSource is not DependencyObject source) return;
-        if (FindVisualParent<ScrollViewer>(source) is not ScrollViewer scrollViewer) return;
+
+        var scrollViewer = GetTargetScrollViewer(source);
+        if (scrollViewer == null) return;
 
         ScrollViewerWheel(scrollViewer, e.Delta);
         e.Handled = true;
@@ -254,6 +257,14 @@ public partial class ModInstallerWindow : Window
 
         ScrollViewerWheel(scrollViewer, e.Delta);
         e.Handled = true;
+    }
+
+    private static ScrollViewer? GetTargetScrollViewer(DependencyObject source)
+    {
+        if (FindVisualParent<ListBox>(source) is ListBox listBox && FindVisualChild<ScrollViewer>(listBox) is ScrollViewer listScrollViewer)
+            return listScrollViewer;
+
+        return FindVisualParent<ScrollViewer>(source);
     }
 
     private static void ScrollViewerWheel(ScrollViewer scrollViewer, int delta)
