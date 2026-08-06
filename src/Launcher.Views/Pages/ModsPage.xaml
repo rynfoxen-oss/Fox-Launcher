@@ -292,7 +292,7 @@
                                      SelectionChanged="InstalledList_SelectionChanged"
                                      PreviewMouseWheel="OnListBoxPreviewMouseWheel"
                                      ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                     ScrollViewer.CanContentScroll="True"
+                                     ScrollViewer.CanContentScroll="False"
                                      VirtualizingPanel.IsVirtualizing="True"
                                      VirtualizingPanel.VirtualizationMode="Recycling">
                                 <ListBox.Style>
@@ -400,10 +400,10 @@
                                                Style="{StaticResource MutedText}" Margin="0,6,0,0"/>
                                 </StackPanel>
                             </Border>
-                            <ListBox ItemsSource="{Binding SearchResults}" SelectedItem="{Binding SelectedResult, Mode=TwoWay}"
+                            <ListBox x:Name="BrowseList" ItemsSource="{Binding SearchResults}" SelectedItem="{Binding SelectedResult, Mode=TwoWay}"
                                      PreviewMouseWheel="OnListBoxPreviewMouseWheel"
                                      ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                     ScrollViewer.CanContentScroll="True"
+                                     ScrollViewer.CanContentScroll="False"
                                      VirtualizingPanel.IsVirtualizing="True"
                                      VirtualizingPanel.VirtualizationMode="Recycling">
                                 <ListBox.Style>

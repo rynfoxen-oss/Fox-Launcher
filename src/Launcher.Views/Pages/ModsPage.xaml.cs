@@ -16,6 +16,12 @@ public partial class ModsPage : UserControl
         InitializeComponent();
         AddHandler(MouseWheelEvent, new MouseWheelEventHandler(OnPagePreviewMouseWheel), handledEventsToo: true);
         AddHandler(UIElement.PreviewMouseWheelEvent, new MouseWheelEventHandler(OnPagePreviewMouseWheel), handledEventsToo: true);
+
+        Loaded += (_, _) =>
+        {
+            InstalledList?.AddHandler(UIElement.PreviewMouseWheelEvent, new MouseWheelEventHandler(OnListBoxPreviewMouseWheel), handledEventsToo: true);
+            BrowseList?.AddHandler(UIElement.PreviewMouseWheelEvent, new MouseWheelEventHandler(OnListBoxPreviewMouseWheel), handledEventsToo: true);
+        };
     }
 
     private void OnPagePreviewMouseWheel(object sender, MouseWheelEventArgs e)
