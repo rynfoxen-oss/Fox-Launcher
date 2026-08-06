@@ -1,6 +1,7 @@
 <UserControl x:Class="Launcher.Views.Pages.ModsPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             PreviewMouseWheel="OnPagePreviewMouseWheel"
              xmlns:vm="clr-namespace:Launcher.Models;assembly=Launcher.Models"
              xmlns:conv="clr-namespace:Launcher.Views.Converters"
              xmlns:ctl="clr-namespace:Launcher.Views.Controls">

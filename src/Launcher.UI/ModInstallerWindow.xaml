@@ -1,6 +1,7 @@
 <Window x:Class="Launcher.UI.ModInstallerWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        PreviewMouseWheel="OnWindowPreviewMouseWheel"
         xmlns:net="clr-namespace:Launcher.Network;assembly=Launcher.Network"
         xmlns:conv="clr-namespace:Launcher.Views.Converters;assembly=Launcher.Views"
         Title="FoxLauncher — Mod Installer"
