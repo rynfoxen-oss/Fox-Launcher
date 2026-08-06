@@ -11,12 +11,14 @@ namespace Launcher.Updater;
 public sealed class UpdateService
 {
     private readonly GitHubApi _github;
+    private readonly Http _http;
     private readonly SettingsService _settings;
     private readonly LogService _log;
 
-    public UpdateService(GitHubApi github, SettingsService settings, LogService log)
+    public UpdateService(GitHubApi github, Http http, SettingsService settings, LogService log)
     {
         _github = github;
+        _http = http;
         _settings = settings;
         _log = log;
     }
@@ -47,8 +49,7 @@ public sealed class UpdateService
     {
         if (string.IsNullOrEmpty(info.DownloadUrl)) return null;
         var target = Path.Combine(Path.GetTempPath(), $"FoxLauncher-{info.LatestVersion}.exe");
-        using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
-        var bytes = await http.GetByteArrayAsync(info.DownloadUrl, ct);
+        var bytes = await _http.GetBytesAsync(info.DownloadUrl, ct);
         await File.WriteAllBytesAsync(target, bytes, ct);
         _log.Info($"Downloaded update {info.LatestVersion} to {target}");
         return target;
@@ -96,9 +97,7 @@ public sealed class UpdateService
                     $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{script}\" \"{newExe}\" \"{currentExe}\"",
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
+                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
             };
             System.Diagnostics.Process.Start(psi);
             _log.Info("Update scheduled for next restart.");

@@ -42,9 +42,18 @@ public partial class UpdateDialog : Window
                 return;
             }
             _downloadedPath = path;
+            StatusText.Text = "Download complete. Applying update...";
+
+            if (_hub.Updater.ApplyUpdate(_downloadedPath))
+            {
+                StatusText.Text = "Update scheduled. Restarting...";
+                Application.Current.Shutdown();
+                return;
+            }
+
             DownloadButton.Visibility = Visibility.Collapsed;
             RestartButton.Visibility = Visibility.Visible;
-            StatusText.Text = "Download complete.";
+            StatusText.Text = "Download complete. Restart to apply.";
         }
         catch (Exception ex)
         {
