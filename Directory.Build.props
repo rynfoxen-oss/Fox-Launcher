@@ -1,0 +1,19 @@
+<Project>
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <WarningsNotAsErrors>nullable</WarningsNotAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591;NU1701</NoWarn>
+    <Version>1.1.3</Version>
+    <Authors>FoxLauncher</Authors>
+    <Product>FoxLauncher</Product>
+    <Company>FoxLauncher</Company>
+    <AccelerateBuildsInVisualStudio>true</AccelerateBuildsInVisualStudio>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+</Project>

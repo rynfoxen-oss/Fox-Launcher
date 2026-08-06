@@ -1,0 +1,38 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>Launcher.UI</RootNamespace>
+    <AssemblyName>FoxLauncher</AssemblyName>
+    <UseWPF>true</UseWPF>
+    <ApplicationIcon>..\..\assets\icons\fox.ico</ApplicationIcon>
+    <StartupObject>Launcher.UI.Program</StartupObject>
+    <AssemblyTitle>FoxLauncher</AssemblyTitle>
+    <Product>FoxLauncher</Product>
+    <Description>Modern Minecraft launcher for Windows</Description>
+    <Version>1.1.3</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Launcher.Models\Launcher.Models.csproj" />
+    <ProjectReference Include="..\Launcher.Utils\Launcher.Utils.csproj" />
+    <ProjectReference Include="..\Launcher.Network\Launcher.Network.csproj" />
+    <ProjectReference Include="..\Launcher.Downloads\Launcher.Downloads.csproj" />
+    <ProjectReference Include="..\Launcher.Authentication\Launcher.Authentication.csproj" />
+    <ProjectReference Include="..\Launcher.Services\Launcher.Services.csproj" />
+    <ProjectReference Include="..\Launcher.Core\Launcher.Core.csproj" />
+    <ProjectReference Include="..\Launcher.InstanceManager\Launcher.InstanceManager.csproj" />
+    <ProjectReference Include="..\Launcher.ModManager\Launcher.ModManager.csproj" />
+    <ProjectReference Include="..\Launcher.Updater\Launcher.Updater.csproj" />
+    <ProjectReference Include="..\Launcher.ViewModels\Launcher.ViewModels.csproj" />
+    <ProjectReference Include="..\Launcher.Views\Launcher.Views.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\assets\**\*" CopyToOutputDirectory="PreserveNewest" Link="assets\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>
+
+

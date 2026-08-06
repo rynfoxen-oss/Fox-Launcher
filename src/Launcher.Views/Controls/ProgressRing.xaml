@@ -1,0 +1,36 @@
+<UserControl x:Class="Launcher.Views.Controls.ProgressRing"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Name="Root">
+    <UserControl.Resources>
+        <Storyboard x:Key="Spin" RepeatBehavior="Forever">
+            <DoubleAnimation Storyboard.TargetName="RingRotateTransform"
+                             Storyboard.TargetProperty="Angle"
+                             From="0" To="360"
+                             Duration="0:0:1.2"/>
+        </Storyboard>
+    </UserControl.Resources>
+    <Grid Width="{Binding Size, ElementName=Root}"
+          Height="{Binding Size, ElementName=Root}"
+          Loaded="OnLoaded"
+          Unloaded="OnUnloaded">
+        <Ellipse Stroke="{StaticResource BorderStrongBrush}"
+                 StrokeThickness="{Binding Thickness, ElementName=Root}"
+                 Margin="{Binding Thickness, ElementName=Root}"/>
+        <Ellipse x:Name="RingRotate" RenderTransformOrigin="0.5,0.5">
+            <Ellipse.RenderTransform>
+                <RotateTransform x:Name="RingRotateTransform"/>
+            </Ellipse.RenderTransform>
+            <Ellipse.Stroke>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Color="{StaticResource AccentColor}" Offset="0"/>
+                    <GradientStop Color="#33FF8B3D" Offset="1"/>
+                </LinearGradientBrush>
+            </Ellipse.Stroke>
+            <Ellipse.StrokeDashArray>1.5,8</Ellipse.StrokeDashArray>
+            <Ellipse.StrokeThickness>
+                <Binding Path="Thickness" ElementName="Root"/>
+            </Ellipse.StrokeThickness>
+        </Ellipse>
+    </Grid>
+</UserControl>

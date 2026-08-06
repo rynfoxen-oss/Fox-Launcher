@@ -1,0 +1,31 @@
+<UserControl x:Class="Launcher.Views.Pages.LogsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="28,24,28,0">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Logs" Style="{StaticResource H1Text}"/>
+                <Button Content="Open log file" Style="{StaticResource GhostButton}" Margin="20,0,0,0"
+                        VerticalAlignment="Center" Command="{Binding OpenFileCommand}"/>
+            </StackPanel>
+        </StackPanel>
+
+        <Border Grid.Row="1" Margin="28,16,28,28" Style="{StaticResource CardPanel}" Padding="0">
+            <Grid Background="#FF0C0F14" ClipToBounds="True">
+                <ListBox x:Name="LogList" ItemsSource="{Binding Lines}" Style="{StaticResource PlainListBox}" Background="Transparent">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" Style="{StaticResource CaptionText}" Foreground="#FFB8C2D0"
+                                       FontFamily="Cascadia Mono, Consolas" TextWrapping="NoWrap"/>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

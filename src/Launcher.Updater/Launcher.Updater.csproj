@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Launcher.Updater</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Launcher.Models\Launcher.Models.csproj" />
+    <ProjectReference Include="..\Launcher.Utils\Launcher.Utils.csproj" />
+    <ProjectReference Include="..\Launcher.Network\Launcher.Network.csproj" />
+    <ProjectReference Include="..\Launcher.Services\Launcher.Services.csproj" />
+  </ItemGroup>
+
+</Project>

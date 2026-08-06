@@ -1,0 +1,83 @@
+using System.Text.Json.Serialization;
+
+namespace Launcher.Models;
+
+/// <summary>
+/// Persisted application settings. Saved as JSON under
+/// <c>%LOCALAPPDATA%\FoxLauncher\settings.json</c> (or next to the exe in
+/// portable mode).
+/// </summary>
+public sealed class AppSettings
+{
+    /// <summary>Maximum memory in megabytes.</summary>
+    public int MaxMemoryMb { get; set; } = 4096;
+
+    /// <summary>Minimum memory in megabytes.</summary>
+    public int MinMemoryMb { get; set; } = 1024;
+
+    /// <summary>Explicit java executable path (empty => automatic).</summary>
+    public string? JavaPath { get; set; }
+
+    /// <summary>Window width of the game.</summary>
+    public int WindowWidth { get; set; } = 854;
+
+    /// <summary>Window height of the game.</summary>
+    public int WindowHeight { get; set; } = 480;
+
+    /// <summary>Start the game in fullscreen.</summary>
+    public bool Fullscreen { get; set; }
+
+    /// <summary>Whether Discord Rich Presence is enabled.</summary>
+    public bool EnableDiscordRpc { get; set; } = true;
+
+    /// <summary>Launcher UI language code ("en", "vi", ...).</summary>
+    public string Language { get; set; } = "en";
+
+    /// <summary>Show the FPS counter in game.</summary>
+    public bool ShowFps { get; set; }
+
+    /// <summary>Close the launcher once the game window appears.</summary>
+    public bool CloseAfterLaunch { get; set; }
+
+    /// <summary>Automatically check for and install updates.</summary>
+    public bool AutoUpdate { get; set; } = true;
+
+    /// <summary>Play the built-in background music.</summary>
+    public bool BackgroundMusic { get; set; } = true;
+
+    /// <summary>Music volume (0..100).</summary>
+    public int MusicVolume { get; set; } = 40;
+
+    /// <summary>UI theme name ("dark" | "light" | "midnight").</summary>
+    public string Theme { get; set; } = "dark";
+
+    /// <summary>Accent color as an ARGB hex string ("#FF8B3D").</summary>
+    public string AccentColor { get; set; } = "#FF8B3D";
+
+    /// <summary>Last selected instance id (restored on startup).</summary>
+    public string? LastInstanceId { get; set; }
+
+    /// <summary>Automatically detect Java on startup.</summary>
+    public bool AutoJavaDetect { get; set; } = true;
+
+    /// <summary>Maximum number of parallel download tasks.</summary>
+    public int DownloadThreads { get; set; } = 8;
+
+    /// <summary>Whether a desktop shortcut should be created on install.</summary>
+    public bool CreateDesktopShortcut { get; set; } = true;
+
+    /// <summary>Microsoft OAuth application (client) id.</summary>
+    public string MicrosoftClientId { get; set; } = "replace-with-your-azure-client-id";
+
+    /// <summary>Last set of saved server entries.</summary>
+    public List<Models.ServerEntry> Servers { get; set; } = new();
+
+    /// <summary>Recently used instance ids for the quick-launch panel.</summary>
+    public List<string> RecentInstances { get; set; } = new();
+
+    /// <summary>Launcher language/region subtitle shown in settings.</summary>
+    [JsonIgnore]
+    public bool IsPortable { get; set; }
+
+    public AppSettings Clone() => (AppSettings)MemberwiseClone();
+}

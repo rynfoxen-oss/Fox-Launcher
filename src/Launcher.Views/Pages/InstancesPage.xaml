@@ -1,0 +1,215 @@
+<UserControl x:Class="Launcher.Views.Pages.InstancesPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Launcher.Models;assembly=Launcher.Models"
+             xmlns:conv="clr-namespace:Launcher.Views.Converters"
+             xmlns:ctl="clr-namespace:Launcher.Views.Controls">
+    <UserControl.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+        <conv:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility"/>
+        <conv:InverseBooleanConverter x:Key="InverseBoolean"/>
+    </UserControl.Resources>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="28,24,28,0">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Instances" Style="{StaticResource H1Text}"/>
+                <Button Content="+ New instance" Style="{StaticResource PrimaryButton}" Margin="20,0,0,0"
+                        VerticalAlignment="Center" Command="{Binding CreateCommand}"/>
+            </StackPanel>
+            <TextBlock Text="{Binding Status}" Style="{StaticResource SecondaryText}" Margin="0,6,0,0"/>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" Padding="28,16,28,28" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+
+                <!-- Create wizard -->
+                <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16"
+                        Visibility="{Binding IsCreating, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <TextBlock Text="Create instance" Style="{StaticResource H2Text}"/>
+                        <Grid Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                <TextBlock Text="Name" Style="{StaticResource CaptionText}" Margin="0,0,0,6"/>
+                                <TextBox Text="{Binding NewName, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource InputTextBox}"
+                                         ToolTip="Leave empty to auto-name"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                                <TextBlock Text="Game version" Style="{StaticResource CaptionText}" Margin="0,0,0,6"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox Grid.Column="0" MinWidth="140"
+                                              ItemsSource="{Binding GameVersions}"
+                                              SelectedItem="{Binding NewGameVersion, Mode=TwoWay}"
+                                              Style="{StaticResource InputComboBox}"
+                                              ToolTip="Choose a Minecraft version to install"/>
+                                    <Button Grid.Column="1" Content="&#xE72C;" Style="{StaticResource IconButton}" Margin="4,0,0,0"
+                                            VerticalAlignment="Center" Command="{Binding RefreshVersionsCommand}"
+                                            ToolTip="Refresh the version list"
+                                            Visibility="{Binding IsLoadingGameVersions, Converter={StaticResource InverseBoolToVisibility}}"/>
+                                    <ctl:ProgressRing Grid.Column="2" Width="16" Height="16" Margin="4,0,0,0"
+                                                      VerticalAlignment="Center"
+                                                      Visibility="{Binding IsLoadingGameVersions, Converter={StaticResource BoolToVisibility}}"/>
+                                </Grid>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Mod loader" Style="{StaticResource CaptionText}" Margin="0,0,0,6"/>
+                                <ComboBox ItemsSource="{Binding LoaderTypes}" SelectedItem="{Binding NewLoader, Mode=TwoWay}"
+                                          Style="{StaticResource InputComboBox}"/>
+                                <TextBlock Text="Vanilla = no mods will load in-game. Choose Fabric or Forge to use mods."
+                                           Style="{StaticResource MutedText}" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Grid>
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0"
+                                    Visibility="{Binding HasLoaderVersionPicker, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel>
+                                <TextBlock Text="Loader version" Style="{StaticResource CaptionText}" Margin="0,0,0,6"/>
+                                <ComboBox ItemsSource="{Binding LoaderVersions}"
+                                          SelectedItem="{Binding NewLoaderVersion, Mode=TwoWay}"
+                                          Style="{StaticResource InputComboBox}" Width="280"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom" Margin="12,0,0,6"
+                                        Visibility="{Binding IsLoadingVersions, Converter={StaticResource BoolToVisibility}}">
+                                <ctl:ProgressRing Width="16" Height="16" VerticalAlignment="Center"/>
+                                <TextBlock Text="Loading versions..." Style="{StaticResource SecondaryText}" Margin="8,0,0,0"/>
+                            </StackPanel>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,14,0,0"
+                                    Visibility="{Binding IsInstalling, Converter={StaticResource BoolToVisibility}}">
+                            <ctl:ProgressRing Width="18" Height="18" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding InstallStage}" Style="{StaticResource SecondaryText}" Margin="10,0,0,0"
+                                       VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="520"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
+                            <Button Content="Create" Style="{StaticResource PrimaryButton}" Command="{Binding ConfirmCreateCommand}"
+                                    IsEnabled="{Binding IsInstalling, Converter={StaticResource InverseBoolean}}"/>
+                            <Button Content="Cancel" Style="{StaticResource GhostButton}" Margin="10,0,0,0" Command="{Binding CancelCreateCommand}"
+                                    IsEnabled="{Binding IsInstalling, Converter={StaticResource InverseBoolean}}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Empty state -->
+                <Border Margin="0,0,0,16">
+                    <Border.Style>
+                        <Style TargetType="Border" BasedOn="{StaticResource CardPanel}">
+                            <Setter Property="Padding" Value="24"/>
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding Instances.Count}" Value="0"/>
+                                        <Condition Binding="{Binding IsCreating}" Value="False"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </MultiDataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <StackPanel>
+                        <TextBlock Text="No instances yet" Style="{StaticResource H2Text}"/>
+                        <TextBlock Text="Create your first instance to get started, or import an existing one."
+                                   Style="{StaticResource MutedText}" Margin="0,6,0,0"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                            <Button Content="+ New instance" Style="{StaticResource PrimaryButton}" Command="{Binding CreateCommand}"/>
+                            <Button Content="Import instance" Style="{StaticResource GhostButton}" Margin="10,0,0,0"
+                                    Command="{Binding ImportCommand}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Instance list -->
+                <ListBox ItemsSource="{Binding Instances}" SelectedValuePath="Id"
+                         SelectedValue="{Binding SelectedId, Mode=TwoWay}"
+                         Style="{StaticResource PlainListBox}"
+                         MouseDoubleClick="OnInstanceDoubleClick">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:GameInstance}">
+                            <Border Margin="0,0,0,10" Padding="14">
+                                <Border.Style>
+                                    <Style TargetType="Border" BasedOn="{StaticResource CardPanel}">
+                                        <Setter Property="Padding" Value="14"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                                <Setter Property="BorderThickness" Value="2"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Name}" Style="{StaticResource H2Text}" FontSize="16"
+                                                       TextTrimming="CharacterEllipsis" MaxWidth="420"/>
+                                            <Border Background="{StaticResource AccentDarkBrush}" CornerRadius="4" Margin="10,2,0,0"
+                                                    Padding="8,2" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding LoaderLabel}" Foreground="{StaticResource TextPrimary}" FontSize="11"/>
+                                            </Border>
+                                            <Border Background="{StaticResource AccentBrush}" CornerRadius="4" Margin="6,2,0,0"
+                                                    Padding="8,2" VerticalAlignment="Center"
+                                                    Visibility="{Binding IsActive, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Text="Active" Foreground="White" FontSize="11" FontWeight="SemiBold"/>
+                                            </Border>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                            <TextBlock Text="{Binding GameVersion, StringFormat='Minecraft {0}'}"
+                                                       Style="{StaticResource MutedText}"/>
+                                            <TextBlock Text="{Binding ModsCount, StringFormat='  ·  {0} mods'}"
+                                                       Style="{StaticResource MutedText}"/>
+                                            <TextBlock Text="{Binding LastPlayedLabel, StringFormat='  ·  Last played {0}'}"
+                                                       Style="{StaticResource MutedText}"/>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding Notes}" Style="{StaticResource SecondaryText}" Margin="0,6,0,0"
+                                                   MaxWidth="520" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Button Content="Play" Style="{StaticResource PrimaryButton}"
+                                                Command="{Binding DataContext.PlayCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                CommandParameter="{Binding}"/>
+                                        <Button Content="Select" Style="{StaticResource GhostButton}" Margin="8,0,0,0"
+                                                Command="{Binding DataContext.SelectCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                CommandParameter="{Binding}"/>
+                                        <Button Content="Rename" Style="{StaticResource GhostButton}" Margin="8,0,0,0"
+                                                Command="{Binding DataContext.RenameCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                CommandParameter="{Binding}"/>
+                                        <Button Content="Duplicate" Style="{StaticResource GhostButton}" Margin="8,0,0,0"
+                                                Command="{Binding DataContext.DuplicateCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                CommandParameter="{Binding}"/>
+                                        <Button Content="Export" Style="{StaticResource GhostButton}" Margin="8,0,0,0"
+                                                Command="{Binding DataContext.ExportCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                CommandParameter="{Binding}"/>
+                                        <Button Content="Delete" Style="{StaticResource DangerButton}" Margin="8,0,0,0"
+                                                Command="{Binding DataContext.DeleteCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                CommandParameter="{Binding}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <Button Content="Import instance (zip or mmc)" Style="{StaticResource GhostButton}" HorizontalAlignment="Left"
+                        Margin="0,4,0,0" Command="{Binding ImportCommand}"/>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

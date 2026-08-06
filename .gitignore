@@ -1,0 +1,28 @@
+# Build outputs
+bin/
+obj/
+artifacts/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Test / coverage
+TestResults/
+*.coverage
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# OneDrive conflicts
+*.sync-conflict*

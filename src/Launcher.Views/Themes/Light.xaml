@@ -1,0 +1,25 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Light theme overrides (dark is the built-in default in Colors.xaml) -->
+    <SolidColorBrush x:Key="WindowBackground" Color="#FFF4F5F7"/>
+    <SolidColorBrush x:Key="TitleBarBackground" Color="#FFEDEFF3"/>
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="SurfaceAltBrush" Color="#FFF1F3F7"/>
+    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#FFE6EAF1"/>
+    <SolidColorBrush x:Key="CardBrush" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="BorderBrush" Color="#FFDCE1E9"/>
+    <SolidColorBrush x:Key="BorderStrongBrush" Color="#FFC3CAD7"/>
+
+    <SolidColorBrush x:Key="TextPrimary" Color="#FF1C2129"/>
+    <SolidColorBrush x:Key="TextSecondary" Color="#FF5A6270"/>
+    <SolidColorBrush x:Key="TextMuted" Color="#FF89929F"/>
+
+    <SolidColorBrush x:Key="ScrollBarThumbBrush" Color="#661C2129"/>
+    <SolidColorBrush x:Key="ScrollBarThumbHoverBrush" Color="#B31C2129"/>
+
+    <SolidColorBrush x:Key="BackgroundOverlayBrush" Color="#33FFFFFF"/>
+
+    <DropShadowEffect x:Key="CardShadow" Color="#4D000000" BlurRadius="18" ShadowDepth="3" Opacity="0.18"/>
+
+</ResourceDictionary>
