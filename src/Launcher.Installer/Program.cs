@@ -79,7 +79,25 @@ internal static class Program
                 Console.ReadKey();
             }
 
-            Process.Start(new ProcessStartInfo { FileName = targetExe, UseShellExecute = true });
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = targetExe,
+                WorkingDirectory = Path.GetDirectoryName(targetExe) ?? installDir,
+                UseShellExecute = true
+            };
+            try
+            {
+                Process.Start(startInfo);
+            }
+            catch
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = targetExe,
+                    WorkingDirectory = Path.GetDirectoryName(targetExe) ?? installDir,
+                    UseShellExecute = false
+                });
+            }
             return 0;
         }
         catch (Exception ex)

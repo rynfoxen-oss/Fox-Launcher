@@ -95,6 +95,7 @@
             <Grid Grid.Row="1" Margin="0,12,0,0">
                 <ListBox x:Name="ResultsList" Style="{StaticResource PlainListBox}"
                          MaxHeight="170" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         PreviewMouseWheel="OnListBoxPreviewMouseWheel"
                          SelectionChanged="OnResultSelected">
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="{x:Type net:ModrinthHit}">
@@ -155,6 +156,7 @@
             <TextBlock x:Name="SelectedModTitle" Style="{StaticResource SectionTitleText}" TextWrapping="Wrap"/>
 
             <ListBox x:Name="VersionList" Grid.Row="1" Style="{StaticResource PlainListBox}" Margin="0,10,0,0"
+                     PreviewMouseWheel="OnListBoxPreviewMouseWheel"
                      ScrollViewer.VerticalScrollBarVisibility="Auto">
                 <ListBox.ItemTemplate>
                     <DataTemplate DataType="{x:Type net:ModrinthVersion}">

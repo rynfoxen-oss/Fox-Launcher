@@ -2,6 +2,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using Launcher.ModManager;
 using Launcher.Models;
 using Launcher.ViewModels;
@@ -13,6 +14,36 @@ public partial class ModsPage : UserControl
     public ModsPage()
     {
         InitializeComponent();
+    }
+
+    private void OnListBoxPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (sender is not DependencyObject source) return;
+        if (FindVisualChild<ScrollViewer>(source) is { } scrollViewer)
+        {
+            if (e.Delta > 0)
+                scrollViewer.LineUp();
+            else
+                scrollViewer.LineDown();
+
+            e.Handled = true;
+        }
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T typedChild)
+                return typedChild;
+
+            var result = FindVisualChild<T>(child);
+            if (result != null)
+                return result;
+        }
+
+        return null;
     }
 
     private void SuggestionList_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)

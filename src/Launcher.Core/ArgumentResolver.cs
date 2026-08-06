@@ -32,6 +32,11 @@ public static class ArgumentResolver
         // JVM arguments
         args.Add("-Xmx" + options.MaxMemoryMb + "M");
         args.Add("-Xms" + options.MinMemoryMb + "M");
+        args.Add("-XX:+UseG1GC");
+        args.Add("-XX:+ParallelRefProcEnabled");
+        args.Add("-XX:MaxGCPauseMillis=50");
+        args.Add("-XX:+AlwaysPreTouch");
+        args.Add("-XX:+DisableExplicitGC");
 
         if (options.ShowFps)
         {

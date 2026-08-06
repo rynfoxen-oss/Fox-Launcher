@@ -289,6 +289,7 @@
                                      SelectedItem="{Binding SelectedMod, Mode=TwoWay}"
                                      SelectionMode="Multiple"
                                      SelectionChanged="InstalledList_SelectionChanged"
+                                     PreviewMouseWheel="OnListBoxPreviewMouseWheel"
                                      ScrollViewer.VerticalScrollBarVisibility="Auto"
                                      ScrollViewer.CanContentScroll="True"
                                      VirtualizingPanel.IsVirtualizing="True"
@@ -399,6 +400,7 @@
                                 </StackPanel>
                             </Border>
                             <ListBox ItemsSource="{Binding SearchResults}" SelectedItem="{Binding SelectedResult, Mode=TwoWay}"
+                                     PreviewMouseWheel="OnListBoxPreviewMouseWheel"
                                      ScrollViewer.VerticalScrollBarVisibility="Auto"
                                      ScrollViewer.CanContentScroll="True"
                                      VirtualizingPanel.IsVirtualizing="True"

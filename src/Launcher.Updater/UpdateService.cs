@@ -67,40 +67,54 @@ public sealed class UpdateService
             var currentExe = Environment.ProcessPath;
             if (string.IsNullOrEmpty(currentExe)) return false;
 
-            var scriptDir = Path.Combine(Path.GetTempPath(), "FoxLauncher-update");
+            var scriptDir = Path.Combine(Path.GetTempPath(), "FoxLauncher-update", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(scriptDir);
             var newExe = Path.Combine(scriptDir, Path.GetFileName(downloadedExe));
             File.Copy(downloadedExe, newExe, overwrite: true);
 
             var script = Path.Combine(scriptDir, "apply.ps1");
             File.WriteAllText(script,
-                "param([string]$src, [string]$dst)\r\n" +
-                "$deadline = (Get-Date).AddMinutes(3)\r\n" +
-                "$ok = $false\r\n" +
+                "param([string]$src, [string]$dst, [int]$pid)\r\n" +
+                "$deadline = (Get-Date).AddMinutes(4)\r\n" +
+                "$copied = $false\r\n" +
                 "while ((Get-Date) -lt $deadline) {\r\n" +
-                "    try {\r\n" +
-                "        Copy-Item -LiteralPath $src -Destination $dst -Force -ErrorAction Stop\r\n" +
-                "        $ok = $true\r\n" +
-                "        break\r\n" +
-                "    } catch {\r\n" +
+                "    $process = Get-Process -Id $pid -ErrorAction SilentlyContinue\r\n" +
+                "    if ($process -eq $null) {\r\n" +
+                "        try {\r\n" +
+                "            Copy-Item -LiteralPath $src -Destination $dst -Force -ErrorAction Stop\r\n" +
+                "            $copied = $true\r\n" +
+                "            break\r\n" +
+                "        } catch {\r\n" +
+                "            Start-Sleep -Milliseconds 500\r\n" +
+                "        }\r\n" +
+                "    } else {\r\n" +
                 "        Start-Sleep -Milliseconds 500\r\n" +
                 "    }\r\n" +
                 "}\r\n" +
-                "if ($ok) { Start-Process -FilePath $dst }\r\n" +
+                "if ($copied) {\r\n" +
+                "    Start-Process -FilePath $dst -WorkingDirectory (Split-Path -Parent $dst) -WindowStyle Hidden\r\n" +
+                "}\r\n" +
+                "Start-Sleep -Seconds 1\r\n" +
                 "Remove-Item -LiteralPath $src -Force -ErrorAction SilentlyContinue\r\n" +
                 "Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue\r\n");
 
+            var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
             var psi = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "powershell.exe",
-                Arguments =
-                    $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{script}\" \"{newExe}\" \"{currentExe}\"",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{script}\" \"{newExe}\" \"{currentExe}\" {pid}",
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
             };
-            System.Diagnostics.Process.Start(psi);
-            _log.Info("Update scheduled for next restart.");
+            var process = System.Diagnostics.Process.Start(psi);
+            if (process is null)
+            {
+                _log.Warn("Failed to launch update script process.");
+                return false;
+            }
+
+            _log.Info($"Update scheduled. Script={script} src={newExe} dst={currentExe} pid={pid}");
             return true;
         }
         catch (Exception ex)

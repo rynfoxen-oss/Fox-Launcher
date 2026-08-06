@@ -98,7 +98,6 @@ public sealed class SettingsViewModel : ViewModelBase
             if (info is null)
             {
                 UpdateStatus = $"You are running the latest version ({AppVersion}).";
-                Services.ShowMessage?.Invoke("FoxLauncher", $"You are running the latest version ({AppVersion}).");
                 return;
             }
             UpdateStatus = $"Version {info.LatestVersion} is available.";

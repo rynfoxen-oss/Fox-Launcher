@@ -41,23 +41,23 @@ public partial class UpdateDialog : Window
                 StatusText.Text = "Download failed. Check your connection and try again.";
                 return;
             }
+
             _downloadedPath = path;
             StatusText.Text = "Download complete. Applying update...";
 
             if (_hub.Updater.ApplyUpdate(_downloadedPath))
             {
-                StatusText.Text = "Update scheduled. Restarting...";
+                StatusText.Text = "Update installed. Restarting FoxLauncher...";
+                await Task.Delay(600);
                 Application.Current.Shutdown();
                 return;
             }
 
-            DownloadButton.Visibility = Visibility.Collapsed;
-            RestartButton.Visibility = Visibility.Visible;
-            StatusText.Text = "Download complete. Restart to apply.";
+            StatusText.Text = "Update failed to apply. Close the launcher and try again later.";
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Download failed: {ex.Message}";
+            StatusText.Text = $"Update failed: {ex.Message}";
         }
         finally
         {
@@ -66,15 +66,11 @@ public partial class UpdateDialog : Window
         }
     }
 
-    private void OnRestartClick(object sender, RoutedEventArgs e)
+    private void OnCloseClick(object sender, RoutedEventArgs e)
     {
-        if (_hub.Updater.ApplyUpdate(_downloadedPath!))
+        if (DownloadButton.IsEnabled)
         {
-            Application.Current.Shutdown();
-        }
-        else
-        {
-            StatusText.Text = "Could not apply the update automatically. Close the launcher and run the update file manually.";
+            Close();
         }
     }
 
@@ -82,6 +78,7 @@ public partial class UpdateDialog : Window
     {
         DownloadButton.IsEnabled = !busy;
         NotNowButton.IsEnabled = !busy;
+        CloseButton.IsEnabled = !busy;
     }
 
     private void OnTitleMouseDown(object sender, MouseButtonEventArgs e)
