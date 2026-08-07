@@ -41,10 +41,29 @@ public static class ArgumentResolver
         }
         args.Add("-XX:+DisableExplicitGC");
 
+        // Never let an unrecognized flag abort the game at startup.
+        args.Add("-XX:+IgnoreUnrecognizedVMOptions");
+
         if (options.MultiCoreOptimization)
         {
             args.Add("-XX:+UseStringDeduplication");
             args.Add("-XX:+OptimizeStringConcat");
+        }
+
+        // Low-latency G1 tuning used by popular third-party launchers. These
+        // flags are safe across Java 8-21 and only apply to the G1 collector.
+        if (options.BoostFps)
+        {
+            args.Add("-XX:G1NewSizePercent=30");
+            args.Add("-XX:G1MaxNewSizePercent=40");
+            args.Add("-XX:G1HeapRegionSize=8M");
+            args.Add("-XX:G1ReservePercent=20");
+            args.Add("-XX:G1HeapWastePercent=5");
+            args.Add("-XX:G1MixedGCCountTarget=4");
+            args.Add("-XX:InitiatingHeapOccupancyPercent=15");
+            args.Add("-XX:SurvivorRatio=32");
+            args.Add("-XX:MaxTenuringThreshold=1");
+            args.Add("-XX:+PerfDisableSharedMem");
         }
 
         // User-supplied extra flags (split on spaces, respecting quotes).

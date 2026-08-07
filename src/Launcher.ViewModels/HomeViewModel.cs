@@ -175,6 +175,7 @@ public sealed class HomeViewModel : ViewModelBase
             GcPauseMillis = Services.Settings.GcPauseMillis,
             AlwaysPreTouch = Services.Settings.AlwaysPreTouch,
             MultiCoreOptimization = Services.Settings.MultiCoreOptimization,
+            BoostFps = Services.Settings.BoostFps,
             JvmArguments = Services.Settings.JvmArguments
         };
 

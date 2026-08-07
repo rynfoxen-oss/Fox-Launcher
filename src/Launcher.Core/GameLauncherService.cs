@@ -133,6 +133,13 @@ public sealed class GameLauncherService
         var gameDir = Paths.InstanceMinecraft(instance.Id);
         Directory.CreateDirectory(gameDir);
 
+        if (options.BoostFps)
+        {
+            progress?.Report(new InstallProgress { Stage = "Applying FPS boost...", Fraction = 0.3 });
+            ApplyFpsOptions(gameDir);
+            await EnsurePerformanceModsAsync(instance, progress, ct);
+        }
+
         SyncLocalSkin(account, gameDir);
         await EnsureCustomSkinLoaderAsync(instance, account, progress, ct);
 
@@ -386,6 +393,104 @@ public sealed class GameLauncherService
         catch (Exception ex)
         {
             _log.Warn($"Failed to prioritize the local skin in CustomSkinLoader config: {ex.Message}");
+        }
+    }
+
+    /// <summary>In-game options used to fill in FPS-friendly defaults. Only applied
+    /// to keys the player has not already configured, so their choices are kept.</summary>
+    private static readonly (string Key, string Value)[] FpsOptionDefaults =
+    {
+        ("renderDistance", "8"),
+        ("simulationDistance", "8"),
+        ("graphicsMode", "fast"),
+        ("fancyGraphics", "false"),
+        ("particles", "minimal"),
+        ("particle", "0"),
+        ("clouds", "fast"),
+        ("cloudsEnabled", "false"),
+        ("biomeBlendRadius", "0"),
+        ("mipmapLevels", "0"),
+        ("vsync", "false"),
+        ("fpsLimit", "144"),
+        ("maxFps", "144"),
+        ("entityShadows", "false"),
+        ("smoothLighting", "off"),
+        ("prioritizeChunkUpdates", "true")
+    };
+
+    /// <summary>
+    /// Writes a performance-oriented <c>options.txt</c> into the instance. Only
+    /// missing keys are set (existing values are preserved) and unknown keys are
+    /// silently ignored by Minecraft, so this is safe across versions.
+    /// </summary>
+    private static void ApplyFpsOptions(string gameDir)
+    {
+        var path = Path.Combine(gameDir, "options.txt");
+        var existing = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (File.Exists(path))
+        {
+            foreach (var line in File.ReadAllLines(path))
+            {
+                var idx = line.IndexOf(':');
+                if (idx > 0) existing[line[..idx]] = line[(idx + 1)..];
+            }
+        }
+
+        var changed = false;
+        foreach (var (key, value) in FpsOptionDefaults)
+        {
+            if (!existing.ContainsKey(key)) { existing[key] = value; changed = true; }
+        }
+        if (!changed) return;
+
+        var sb = new StringBuilder();
+        foreach (var kv in existing)
+        {
+            sb.Append(kv.Key).Append(':').Append(kv.Value).Append('\n');
+        }
+        File.WriteAllText(path, sb.ToString());
+    }
+
+    /// <summary>Fabric/Quilt mods that give the biggest FPS win for modded play.</summary>
+    private static readonly string[] FabricPerfMods = { "sodium", "lithium", "entityculling" };
+
+    /// <summary>Forge/NeoForge equivalents (Embeddium is the Sodium port).</summary>
+    private static readonly string[] ForgePerfMods = { "embeddium", "ferritecore", "entityculling" };
+
+    /// <summary>
+    /// Installs performance mods (with automatic dependencies) into modded
+    /// instances when the FPS boost is enabled. Incompatible or failed installs
+    /// are skipped without blocking the launch.
+    /// </summary>
+    private async Task EnsurePerformanceModsAsync(
+        GameInstance instance, IProgress<InstallProgress>? progress, CancellationToken ct)
+    {
+        if (instance.Loader == ModLoaderType.Vanilla) return;
+
+        var targets = instance.Loader is ModLoaderType.Fabric or ModLoaderType.Quilt
+            ? FabricPerfMods
+            : ForgePerfMods;
+
+        var modsDir = Path.Combine(Paths.InstanceMinecraft(instance.Id), "mods");
+        foreach (var slug in targets)
+        {
+            if (ct.IsCancellationRequested) return;
+            if (Directory.Exists(modsDir) && Directory.GetFiles(modsDir, "*.jar", SearchOption.TopDirectoryOnly)
+                    .Any(f => Path.GetFileNameWithoutExtension(f).Contains(slug, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            try
+            {
+                progress?.Report(new InstallProgress { Stage = $"Installing {slug} for FPS boost...", Fraction = 0.3 });
+                await _mods.InstallFromModrinthAsync(instance.Id, slug, instance.Loader, instance.GameVersion, ct);
+                _log.Info($"FPS boost: installed '{slug}' into '{instance.Id}'.");
+            }
+            catch (Exception ex)
+            {
+                _log.Warn($"FPS boost: skipping '{slug}' for '{instance.Id}': {ex.Message}");
+            }
         }
     }
 

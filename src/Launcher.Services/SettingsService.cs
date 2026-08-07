@@ -163,6 +163,12 @@ public sealed class SettingsService : ObservableObject
         set { _settings.MultiCoreOptimization = value; OnPropertyChanged(); Save(); }
     }
 
+    public bool BoostFps
+    {
+        get => _settings.BoostFps;
+        set { _settings.BoostFps = value; OnPropertyChanged(); Save(); }
+    }
+
     public List<ServerEntry> Servers => _settings.Servers;
 
     public List<string> RecentInstances => _settings.RecentInstances;

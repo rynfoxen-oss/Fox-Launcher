@@ -50,4 +50,8 @@ public sealed class LaunchOptions
 
     /// <summary>Extra free-form JVM arguments appended to the command line.</summary>
     public string? JvmArguments { get; set; }
+
+    /// <summary>Apply FPS boosting: tuned JVM flags, optimized in-game graphics
+    /// defaults and automatic performance mods.</summary>
+    public bool BoostFps { get; set; }
 }

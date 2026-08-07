@@ -81,6 +81,10 @@ public sealed class AppSettings
     /// <summary>Add JVM flags that reduce garbage-collection hitches on multicore CPUs.</summary>
     public bool MultiCoreOptimization { get; set; } = true;
 
+    /// <summary>Apply FPS boosting on launch: tuned JVM flags, optimized in-game
+    /// graphics defaults and automatic performance mods.</summary>
+    public bool BoostFps { get; set; }
+
     /// <summary>Microsoft OAuth application (client) id.</summary>
     public string MicrosoftClientId { get; set; } = "replace-with-your-azure-client-id";
 
