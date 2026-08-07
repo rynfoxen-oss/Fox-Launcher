@@ -195,6 +195,12 @@ public sealed class ServersViewModel : ViewModelBase
             return;
         }
 
+        if (Services.Settings.ConfirmBeforeLaunch
+            && Services.ConfirmDialog?.Invoke("Join server", $"Launch '{server.Name}'?") == false)
+        {
+            return;
+        }
+
         var options = new LaunchOptions
         {
             Width = Services.Settings.WindowWidth,

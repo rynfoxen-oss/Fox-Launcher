@@ -117,32 +117,89 @@
 
         <Grid Grid.Row="1" Margin="28,0,28,28">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="210"/>
+                <ColumnDefinition Width="252"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- ===== Section navigation ===== -->
-            <ListBox x:Name="SectionList" Grid.Column="0" Style="{StaticResource NavListBox}"
-                     ItemsSource="{Binding Sections}" SelectedIndex="0" SelectionChanged="OnSectionChanged"
-                     Margin="0,20,16,0" VerticalAlignment="Top">
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <StackPanel Orientation="Horizontal" Margin="12,11">
-                            <TextBlock Text="{Binding Glyph}" FontFamily="Segoe MDL2 Assets" FontSize="14"
-                                       Foreground="{DynamicResource TextSecondary}" Width="24" VerticalAlignment="Center"/>
-                            <TextBlock Text="{Binding Title}" Style="{StaticResource BaseText}"/>
-                        </StackPanel>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
+            <!-- ===== Section navigation + search ===== -->
+            <StackPanel Grid.Column="0" Margin="0,20,16,0">
+                <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{StaticResource SettingsTextBox}" ToolTip="Search settings by name or topic"/>
+                <TextBlock Text="Search settings" Style="{StaticResource SettingsMutedText}" Margin="2,6,0,0" FontSize="11.5"/>
+
+                <ListBox x:Name="SectionList" Style="{StaticResource NavListBox}" Margin="0,14,0,0"
+                         ItemsSource="{Binding Sections}" SelectedItem="{Binding SelectedSection, Mode=TwoWay}"
+                         SelectionChanged="OnSectionChanged">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="14,11">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Glyph}" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                               Foreground="{DynamicResource TextSecondary}" Width="26" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Title}" Style="{StaticResource BaseText}" FontWeight="SemiBold"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding Description}" Style="{StaticResource SettingsMutedText}"
+                                           FontSize="11.5" Margin="26,3,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </StackPanel>
 
             <!-- ===== Section content ===== -->
             <ScrollViewer x:Name="ContentScroller" Grid.Column="1" Padding="0,20,0,0"
                           VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel MaxWidth="880" HorizontalAlignment="Left">
 
+                    <!-- ============ Launcher ============ -->
+                    <Grid x:Name="LauncherSection">
+                        <StackPanel>
+                            <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <TextBlock Text="Startup" Style="{StaticResource SettingsH2Text}"/>
+                                    <TextBlock Text="What you see when the launcher opens." Style="{StaticResource SettingsMutedText}"/>
+
+                                    <TextBlock Text="Page on startup" Style="{StaticResource SettingsCaptionText}" Margin="0,22,0,8"/>
+                                    <ComboBox ItemsSource="{Binding StartupPages}"
+                                              SelectedItem="{Binding SelectedStartupPage, Mode=TwoWay}"
+                                              Style="{StaticResource SettingsComboBox}" Width="240" HorizontalAlignment="Left"/>
+                                    <TextBlock Text="The first page shown after the launcher loads." Style="{StaticResource SettingsMutedText}" Margin="0,8,0,0"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource CardPanel}">
+                                <StackPanel>
+                                    <TextBlock Text="Behavior" Style="{StaticResource SettingsH2Text}"/>
+                                    <TextBlock Text="How the launcher runs while you use it." Style="{StaticResource SettingsMutedText}"/>
+
+                                    <StackPanel Margin="0,22,0,0">
+                                        <CheckBox Content="Close launcher after game starts" Style="{StaticResource SettingsToggle}"
+                                                  IsChecked="{Binding Settings.CloseAfterLaunch, Mode=TwoWay}"/>
+                                        <TextBlock Text="Closes the launcher once the game window appears." Style="{StaticResource SettingsMutedText}" Margin="56,2,0,0"/>
+
+                                        <CheckBox Content="Confirm before launching" Style="{StaticResource SettingsToggle}" Margin="0,18,0,0"
+                                                  IsChecked="{Binding Settings.ConfirmBeforeLaunch, Mode=TwoWay}"/>
+                                        <TextBlock Text="Ask before starting a game." Style="{StaticResource SettingsMutedText}" Margin="56,2,0,0"/>
+
+                                        <CheckBox Content="Check for updates automatically" Style="{StaticResource SettingsToggle}" Margin="0,18,0,0"
+                                                  IsChecked="{Binding Settings.AutoUpdate, Mode=TwoWay}"/>
+                                        <TextBlock Text="Automatically look for a new version on startup." Style="{StaticResource SettingsMutedText}" Margin="56,2,0,0"/>
+
+                                        <CheckBox Content="Auto-detect Java on startup" Style="{StaticResource SettingsToggle}" Margin="0,18,0,0"
+                                                  IsChecked="{Binding Settings.AutoJavaDetect, Mode=TwoWay}"/>
+                                        <TextBlock Text="Search for an installed Java runtime automatically." Style="{StaticResource SettingsMutedText}" Margin="56,2,0,0"/>
+
+                                        <CheckBox Content="Create desktop shortcut on install" Style="{StaticResource SettingsToggle}" Margin="0,18,0,0"
+                                                  IsChecked="{Binding Settings.CreateDesktopShortcut, Mode=TwoWay}"/>
+                                        <TextBlock Text="Add a FoxLauncher shortcut to the desktop during installation." Style="{StaticResource SettingsMutedText}" Margin="56,2,0,0"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+
                     <!-- ============ Game & Java ============ -->
-                    <Grid x:Name="GameSection">
+                    <Grid x:Name="GameSection" Visibility="Collapsed">
                         <StackPanel>
                             <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
                                 <StackPanel>
@@ -186,7 +243,7 @@
                                         <Button Grid.Column="1" Content="Browse" Style="{StaticResource GhostButton}" Command="{Binding BrowseJavaCommand}"/>
                                         <Button Grid.Column="2" Content="Auto detect" Style="{StaticResource GhostButton}" Command="{Binding DetectJavaCommand}"/>
                                     </Grid>
-                                    <TextBlock Text="{Binding JavaStatus}" Style="{StaticResource SettingsMutedText}" Margin="0,8,0,0"/>
+                                    <TextBlock Text="{Binding JavaStatus}" Style="{StaticResource SettingsMutedText}" Margin="0,8,0,0" TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Border>
 
@@ -195,7 +252,12 @@
                                     <TextBlock Text="Window" Style="{StaticResource SettingsH2Text}"/>
                                     <TextBlock Text="The size and mode the game starts in." Style="{StaticResource SettingsMutedText}"/>
 
-                                    <Grid Margin="0,22,0,0">
+                                    <TextBlock Text="Resolution" Style="{StaticResource SettingsCaptionText}" Margin="0,22,0,8"/>
+                                    <ComboBox ItemsSource="{Binding ResolutionPresets}" DisplayMemberPath="Name"
+                                              SelectedItem="{Binding SelectedResolutionPreset, Mode=TwoWay}"
+                                              Style="{StaticResource SettingsComboBox}" Width="240" HorizontalAlignment="Left"/>
+
+                                    <Grid Margin="0,18,0,0">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="*"/>
@@ -228,18 +290,6 @@
                     <!-- ============ Performance ============ -->
                     <Grid x:Name="PerformanceSection" Visibility="Collapsed">
                         <StackPanel>
-                            <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
-                                <StackPanel>
-                                    <TextBlock Text="Launcher performance" Style="{StaticResource SettingsH2Text}"/>
-                                    <TextBlock Text="Reduce the visual work the launcher UI does on screen." Style="{StaticResource SettingsMutedText}"/>
-
-                                    <CheckBox Content="Reduce UI effects" Style="{StaticResource SettingsToggle}" Margin="0,22,0,0"
-                                              IsChecked="{Binding Settings.DisableAnimations, Mode=TwoWay}"/>
-                                    <TextBlock Text="Removes card shadows and animations. Smoother on low-end machines, flatter look."
-                                               Style="{StaticResource SettingsMutedText}" Margin="56,2,0,0"/>
-                                </StackPanel>
-                            </Border>
-
                             <Border Style="{StaticResource CardPanel}">
                                 <StackPanel>
                                     <TextBlock Text="Game performance" Style="{StaticResource SettingsH2Text}"/>
@@ -292,6 +342,11 @@
                                     <TextBlock Text="Pick the launcher's overall look." Style="{StaticResource SettingsMutedText}"/>
                                     <ComboBox ItemsSource="{Binding Themes}" SelectedItem="{Binding Settings.Theme, Mode=TwoWay}"
                                               Style="{StaticResource SettingsComboBox}" Width="220" HorizontalAlignment="Left" Margin="0,20,0,0"/>
+
+                                    <CheckBox Content="Reduce UI effects" Style="{StaticResource SettingsToggle}" Margin="0,24,0,0"
+                                              IsChecked="{Binding Settings.DisableAnimations, Mode=TwoWay}"/>
+                                    <TextBlock Text="Removes card shadows and animations. Smoother on low-end machines, flatter look."
+                                               Style="{StaticResource SettingsMutedText}" Margin="56,2,0,0"/>
                                 </StackPanel>
                             </Border>
 
@@ -337,13 +392,35 @@
                         </StackPanel>
                     </Grid>
 
+                    <!-- ============ Downloads ============ -->
+                    <Grid x:Name="DownloadsSection" Visibility="Collapsed">
+                        <StackPanel>
+                            <Border Style="{StaticResource CardPanel}">
+                                <StackPanel>
+                                    <TextBlock Text="Download speed" Style="{StaticResource SettingsH2Text}"/>
+                                    <TextBlock Text="How many files the launcher downloads at once." Style="{StaticResource SettingsMutedText}"/>
+
+                                    <Grid Margin="0,22,0,0">
+                                        <TextBlock Text="Parallel downloads" Style="{StaticResource SettingsCaptionText}"/>
+                                        <TextBlock Text="{Binding Settings.DownloadThreads, StringFormat={}{0} threads}"
+                                                   Style="{StaticResource SettingsMutedText}" HorizontalAlignment="Right"/>
+                                    </Grid>
+                                    <Slider Minimum="1" Maximum="32" TickFrequency="1" IsSnapToTickEnabled="True"
+                                            Value="{Binding Settings.DownloadThreads, Mode=TwoWay}" Style="{StaticResource SettingsSlider}"/>
+                                    <TextBlock Text="Used for Minecraft versions, libraries, mods, shaders and resource packs."
+                                               Style="{StaticResource SettingsMutedText}"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+
                     <!-- ============ General ============ -->
                     <Grid x:Name="GeneralSection" Visibility="Collapsed">
                         <StackPanel>
                             <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
                                 <StackPanel>
-                                    <TextBlock Text="Language &amp; downloads" Style="{StaticResource SettingsH2Text}"/>
-                                    <TextBlock Text="Interface language and download performance." Style="{StaticResource SettingsMutedText}"/>
+                                    <TextBlock Text="Language &amp; audio" Style="{StaticResource SettingsH2Text}"/>
+                                    <TextBlock Text="Interface language and background music." Style="{StaticResource SettingsMutedText}"/>
 
                                     <TextBlock Text="Language" Style="{StaticResource SettingsCaptionText}" Margin="0,22,0,8"/>
                                     <ComboBox ItemsSource="{Binding LanguageOptions}" SelectedValuePath="Code"
@@ -351,54 +428,23 @@
                                               ItemTemplate="{StaticResource LanguageOptionTemplate}"
                                               Style="{StaticResource SettingsComboBox}" Width="220" HorizontalAlignment="Left"/>
 
-                                    <TextBlock Text="Download threads" Style="{StaticResource SettingsCaptionText}" Margin="0,22,0,8"/>
-                                    <Slider Minimum="1" Maximum="32" TickFrequency="1" IsSnapToTickEnabled="True"
-                                            Value="{Binding Settings.DownloadThreads, Mode=TwoWay}" Style="{StaticResource SettingsSlider}"/>
-                                    <TextBlock Text="{Binding Settings.DownloadThreads, StringFormat={}{0} parallel downloads}"
-                                               Style="{StaticResource SettingsMutedText}"/>
-                                </StackPanel>
-                            </Border>
-
-                            <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
-                                <StackPanel>
-                                    <TextBlock Text="Behavior" Style="{StaticResource SettingsH2Text}"/>
-                                    <TextBlock Text="How the launcher behaves while running." Style="{StaticResource SettingsMutedText}"/>
-
-                                    <StackPanel Margin="0,22,0,0">
-                                        <CheckBox Content="Close launcher after game starts" Style="{StaticResource SettingsToggle}"
-                                                  IsChecked="{Binding Settings.CloseAfterLaunch, Mode=TwoWay}"/>
-                                        <TextBlock Text="Closes the launcher once the game window appears." Style="{StaticResource SettingsMutedText}" Margin="56,2,0,0"/>
-
-                                        <CheckBox Content="Enable Discord Rich Presence" Style="{StaticResource SettingsToggle}" Margin="0,18,0,0"
-                                                  IsChecked="{Binding Settings.EnableDiscordRpc, Mode=TwoWay}"/>
-                                        <TextBlock Text="Show what you're playing on Discord." Style="{StaticResource SettingsMutedText}" Margin="56,2,0,0"/>
-
-                                        <CheckBox Content="Check for updates automatically" Style="{StaticResource SettingsToggle}" Margin="0,18,0,0"
-                                                  IsChecked="{Binding Settings.AutoUpdate, Mode=TwoWay}"/>
-                                        <TextBlock Text="Automatically look for a new version on startup." Style="{StaticResource SettingsMutedText}" Margin="56,2,0,0"/>
-
-                                        <CheckBox Content="Auto-detect Java on startup" Style="{StaticResource SettingsToggle}" Margin="0,18,0,0"
-                                                  IsChecked="{Binding Settings.AutoJavaDetect, Mode=TwoWay}"/>
-                                        <TextBlock Text="Search for an installed Java runtime automatically." Style="{StaticResource SettingsMutedText}" Margin="56,2,0,0"/>
-
-                                        <CheckBox Content="Create desktop shortcut on install" Style="{StaticResource SettingsToggle}" Margin="0,18,0,0"
-                                                  IsChecked="{Binding Settings.CreateDesktopShortcut, Mode=TwoWay}"/>
-                                        <TextBlock Text="Add a FoxLauncher shortcut to the desktop during installation." Style="{StaticResource SettingsMutedText}" Margin="56,2,0,0"/>
-                                    </StackPanel>
-                                </StackPanel>
-                            </Border>
-
-                            <Border Style="{StaticResource CardPanel}">
-                                <StackPanel>
-                                    <TextBlock Text="Audio" Style="{StaticResource SettingsH2Text}"/>
-                                    <TextBlock Text="Background music played while browsing the launcher." Style="{StaticResource SettingsMutedText}"/>
-
-                                    <CheckBox Content="Play background music" Style="{StaticResource SettingsToggle}" Margin="0,22,0,0"
+                                    <CheckBox Content="Play background music" Style="{StaticResource SettingsToggle}" Margin="0,24,0,0"
                                               IsChecked="{Binding Settings.BackgroundMusic, Mode=TwoWay}"/>
                                     <TextBlock Text="Music volume" Style="{StaticResource SettingsCaptionText}" Margin="0,16,0,6"/>
                                     <Slider Minimum="0" Maximum="100" Value="{Binding Settings.MusicVolume, Mode=TwoWay}"
                                             Style="{StaticResource SettingsSlider}" IsEnabled="{Binding Settings.BackgroundMusic}"/>
                                     <TextBlock Text="{Binding Settings.MusicVolume, StringFormat={}{0}%}" Style="{StaticResource SettingsMutedText}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource CardPanel}">
+                                <StackPanel>
+                                    <TextBlock Text="Integration" Style="{StaticResource SettingsH2Text}"/>
+                                    <TextBlock Text="Connect the launcher to other apps." Style="{StaticResource SettingsMutedText}"/>
+
+                                    <CheckBox Content="Enable Discord Rich Presence" Style="{StaticResource SettingsToggle}" Margin="0,22,0,0"
+                                              IsChecked="{Binding Settings.EnableDiscordRpc, Mode=TwoWay}"/>
+                                    <TextBlock Text="Show what you're playing on Discord." Style="{StaticResource SettingsMutedText}" Margin="56,2,0,0"/>
                                 </StackPanel>
                             </Border>
                         </StackPanel>

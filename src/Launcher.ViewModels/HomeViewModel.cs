@@ -129,6 +129,12 @@ public sealed class HomeViewModel : ViewModelBase
             return;
         }
 
+        if (Services.Settings.ConfirmBeforeLaunch
+            && Services.ConfirmDialog?.Invoke("Launch game", $"Launch '{instance.Name}'?") == false)
+        {
+            return;
+        }
+
         var versionId = instance.VersionId;
         var installed = Services.VersionInstall.IsInstalled(versionId);
 

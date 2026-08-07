@@ -14,12 +14,14 @@ public partial class SettingsPage : UserControl
 
     private void OnSectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        var index = SectionList.SelectedIndex;
-        GameSection.Visibility = index == 0 ? Visibility.Visible : Visibility.Collapsed;
-        PerformanceSection.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed;
-        AppearanceSection.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
-        GeneralSection.Visibility = index == 3 ? Visibility.Visible : Visibility.Collapsed;
-        AboutSection.Visibility = index == 4 ? Visibility.Visible : Visibility.Collapsed;
+        var key = (SectionList.SelectedItem as SettingsSection)?.Key;
+        LauncherSection.Visibility = key == "launcher" ? Visibility.Visible : Visibility.Collapsed;
+        GameSection.Visibility = key == "game" ? Visibility.Visible : Visibility.Collapsed;
+        PerformanceSection.Visibility = key == "performance" ? Visibility.Visible : Visibility.Collapsed;
+        AppearanceSection.Visibility = key == "appearance" ? Visibility.Visible : Visibility.Collapsed;
+        DownloadsSection.Visibility = key == "downloads" ? Visibility.Visible : Visibility.Collapsed;
+        GeneralSection.Visibility = key == "general" ? Visibility.Visible : Visibility.Collapsed;
+        AboutSection.Visibility = key == "about" ? Visibility.Visible : Visibility.Collapsed;
         ContentScroller?.ScrollToTop();
     }
 }

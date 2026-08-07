@@ -9,6 +9,8 @@ and uses [Semantic Versioning](https://semver.org/).
 - Reset all previous pre-release versions. From now on 1.0.0 is the first official release, and every launcher on an older version updates to it automatically.
 - Redesigned the Settings page for easier use: larger text and controls, a roomier layout, and a wider scrollbar that is easier to grab and drag.
 - Custom skins now require a Fabric instance. Skin syncing and the CustomSkinLoader mod are only installed for Fabric instances, and the Accounts page explains this.
+- Redesigned the Settings page again with a searchable navigation, seven organized sections (Launcher, Game & Java, Performance, Appearance, Downloads, General, About), and richer nav items with descriptions.
+- Added new settings: choose the page shown on startup, ask for confirmation before launching a game or joining a server, and quick in-game resolution presets.
 
 ## [1.1.5] - 2026-08-06
 ### Added

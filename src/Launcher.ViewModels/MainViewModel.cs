@@ -48,7 +48,7 @@ public sealed class MainViewModel : ViewModelBase
         };
 
         _accountsPage = services.Container.Resolve<AccountsViewModel>();
-        _currentPage = home;
+        _currentPage = ResolveStartupPage(home);
         RefreshAccounts();
         RestoreLastInstance();
 
@@ -205,6 +205,14 @@ public sealed class MainViewModel : ViewModelBase
     }
 
     public void Navigate(NavItem item) => CurrentPage = item.ViewModel;
+
+    /// <summary>Resolves the page to show at startup from the StartupPage setting.</summary>
+    private ViewModelBase ResolveStartupPage(ViewModelBase fallback)
+    {
+        var startup = Services.Settings.StartupPage;
+        return Pages.FirstOrDefault(p => string.Equals(p.Title, startup, StringComparison.OrdinalIgnoreCase))?.ViewModel
+            ?? fallback;
+    }
 
     /// <summary>Selects an account by index.</summary>
     public void SelectAccount(int index)

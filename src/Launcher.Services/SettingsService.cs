@@ -169,6 +169,18 @@ public sealed class SettingsService : ObservableObject
         set { _settings.BoostFps = value; OnPropertyChanged(); Save(); }
     }
 
+    public string StartupPage
+    {
+        get => _settings.StartupPage;
+        set { _settings.StartupPage = value; OnPropertyChanged(); Save(); }
+    }
+
+    public bool ConfirmBeforeLaunch
+    {
+        get => _settings.ConfirmBeforeLaunch;
+        set { _settings.ConfirmBeforeLaunch = value; OnPropertyChanged(); Save(); }
+    }
+
     public List<ServerEntry> Servers => _settings.Servers;
 
     public List<string> RecentInstances => _settings.RecentInstances;

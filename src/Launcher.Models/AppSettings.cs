@@ -85,6 +85,12 @@ public sealed class AppSettings
     /// graphics defaults and automatic performance mods.</summary>
     public bool BoostFps { get; set; }
 
+    /// <summary>Page shown when the launcher starts ("Home", "Instances", ...).</summary>
+    public string StartupPage { get; set; } = "Home";
+
+    /// <summary>Ask for confirmation before launching a game.</summary>
+    public bool ConfirmBeforeLaunch { get; set; }
+
     /// <summary>Microsoft OAuth application (client) id.</summary>
     public string MicrosoftClientId { get; set; } = "replace-with-your-azure-client-id";
 
