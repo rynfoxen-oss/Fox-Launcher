@@ -12,7 +12,7 @@ public static class AppInfo
     public const string Brand = "foxlauncher";
 
     /// <summary>Launcher version.</summary>
-    public const string Version = "1.1.10";
+    public const string Version = "1.0.0";
 
     /// <summary>Version type reported to Minecraft.</summary>
     public const string VersionType = "release";

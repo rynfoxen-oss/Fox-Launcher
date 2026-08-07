@@ -39,7 +39,8 @@ public sealed class GitHubApi
             DownloadUrl = asset?.BrowserDownloadUrl,
             Sha256 = asset?.Digest,
             Notes = release.Body,
-            ReleasedAt = release.PublishedAt
+            ReleasedAt = release.PublishedAt,
+            ForceUpdate = release.Body?.Contains("force-update: true", StringComparison.OrdinalIgnoreCase) == true
         };
     }
 }

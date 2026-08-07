@@ -32,7 +32,15 @@ public sealed class UpdateInfo
     public DateTimeOffset ReleasedAt { get; set; }
 
     /// <summary>
-    /// True when the latest release is strictly newer than the running version.
+    /// True when the release body contains a <c>force-update: true</c> marker,
+    /// meaning everyone should move to this version even if its number is lower
+    /// than the one they already run (used for the 1.0.0 version reset).
+    /// </summary>
+    public bool ForceUpdate { get; set; }
+
+    /// <summary>
+    /// True when the latest release is strictly newer than the running version,
+    /// or when the release is marked as a forced update to a different version.
     /// Uses flexible numeric parsing and compares prereleases as lower than the
     /// corresponding release.
     /// </summary>
@@ -41,9 +49,9 @@ public sealed class UpdateInfo
         get
         {
             if (string.IsNullOrWhiteSpace(DownloadUrl)) return false;
-            return Version.TryParse(LatestVersion, out var latest)
-                && Version.TryParse(AppInfo.Version, out var current)
-                && latest.CompareTo(current) > 0;
+            if (!Version.TryParse(LatestVersion, out var latest)) return false;
+            if (!Version.TryParse(AppInfo.Version, out var current)) return false;
+            return (ForceUpdate && latest.CompareTo(current) != 0) || latest.CompareTo(current) > 0;
         }
     }
 

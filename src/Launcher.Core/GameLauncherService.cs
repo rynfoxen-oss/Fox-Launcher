@@ -140,7 +140,9 @@ public sealed class GameLauncherService
             await EnsurePerformanceModsAsync(instance, progress, ct);
         }
 
-        SyncLocalSkin(account, gameDir);
+        // Custom skins (for offline accounts) are only available on Fabric
+        // instances, where the CustomSkinLoader mod can be installed.
+        if (instance.Loader == ModLoaderType.Fabric) SyncLocalSkin(account, gameDir);
         await EnsureCustomSkinLoaderAsync(instance, account, progress, ct);
 
         var args = ArgumentResolver.BuildArguments(
@@ -312,8 +314,8 @@ public sealed class GameLauncherService
 
     /// <summary>
     /// Copies an offline account's local skin into the instance's CustomSkinLoader
-    /// LocalSkin folder so modded servers with CustomSkinLoader pick it up in-game.
-    /// Also removes stale copies when the skin has been reset.
+    /// LocalSkin folder so Fabric instances with CustomSkinLoader pick it up in-game.
+    /// Also removes stale copies when the skin has been reset. Only runs on Fabric.
     /// </summary>
     private void SyncLocalSkin(Account account, string gameDir)
     {
@@ -357,13 +359,13 @@ public sealed class GameLauncherService
     /// <summary>
     /// Ensures the CustomSkinLoader mod is present so a cracked/offline account's
     /// local skin (synced via <see cref="SyncLocalSkin"/>) actually shows in-game.
-    /// Skips instances without a mod loader, or when the mod is already installed.
+    /// Skins require a Fabric instance; other loaders and vanilla are skipped.
     /// </summary>
     private async Task EnsureCustomSkinLoaderAsync(
         GameInstance instance, Account account, IProgress<InstallProgress>? progress, CancellationToken ct)
     {
         if (account.Type != AccountType.Offline || string.IsNullOrWhiteSpace(account.SkinUrl)) return;
-        if (instance.Loader == ModLoaderType.Vanilla) return;
+        if (instance.Loader != ModLoaderType.Fabric) return;
 
         // Make the locally uploaded skin win over online skin servers (e.g. an
         // Ely.by/TLauncher skin for the same player name) whenever possible.

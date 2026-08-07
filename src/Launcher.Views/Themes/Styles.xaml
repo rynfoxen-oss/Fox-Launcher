@@ -550,8 +550,8 @@
     </Style>
 
     <Style TargetType="ScrollBar">
-        <Setter Property="Width" Value="10"/>
-        <Setter Property="MinWidth" Value="10"/>
+        <Setter Property="Width" Value="12"/>
+        <Setter Property="MinWidth" Value="12"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="OverridesDefaultStyle" Value="True"/>
         <Setter Property="Template">
@@ -582,8 +582,8 @@
                             <Setter Property="VerticalAlignment" Value="Bottom"/>
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Width" Value="13"/>
-                            <Setter Property="MinWidth" Value="13"/>
+                            <Setter Property="Width" Value="15"/>
+                            <Setter Property="MinWidth" Value="15"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

@@ -4,6 +4,12 @@ All notable changes to FoxLauncher are documented in this file.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and uses [Semantic Versioning](https://semver.org/).
 
+## [1.0.0] - 2026-08-07
+### Changed
+- Reset all previous pre-release versions. From now on 1.0.0 is the first official release, and every launcher on an older version updates to it automatically.
+- Redesigned the Settings page for easier use: larger text and controls, a roomier layout, and a wider scrollbar that is easier to grab and drag.
+- Custom skins now require a Fabric instance. Skin syncing and the CustomSkinLoader mod are only installed for Fabric instances, and the Accounts page explains this.
+
 ## [1.1.5] - 2026-08-06
 ### Added
 - Added a "Boost FPS" option in Settings &gt; Performance. When enabled the launcher applies low-latency G1 JVM flags, fills in FPS-friendly in-game graphics defaults (render distance, particles, clouds, vsync, biome blend, mipmaps) without overwriting existing choices, and auto-installs performance mods per instance (Sodium, Lithium, Krypton, ModernFix, FerriteCore, Noisium, ImmediatelyFast and EntityCulling on Fabric/Quilt; Embeddium, Canary, ModernFix, FerriteCore, Noisium, ImmediatelyFast and EntityCulling on Forge/NeoForge). Incompatible mods are skipped automatically.

@@ -126,7 +126,7 @@ public sealed class AccountsViewModel : ViewModelBase
             ? "No custom skin yet — the default skin is shown. Click Change skin to set one."
             : Active?.Type == AccountType.Microsoft
                 ? "This skin is synced to your Microsoft account."
-                : "Local skin for this offline profile.";
+                : "Local skin for this offline profile. It appears in-game only on Fabric instances.";
 
     private async Task MicrosoftLoginAsync()
     {
@@ -225,7 +225,7 @@ public sealed class AccountsViewModel : ViewModelBase
                 account.SkinUrl = new Uri(dest).AbsoluteUri;
                 Services.Accounts.SaveAccount(account);
                 ActiveSkinUrl = account.SkinUrl;
-                Status = "Skin saved for this offline profile. It is shown in the launcher; servers with a skin mod will use it in-game.";
+                Status = "Skin saved for this offline profile. It is shown in the launcher; play it on a Fabric instance to see it in-game.";
             }
             else
             {
