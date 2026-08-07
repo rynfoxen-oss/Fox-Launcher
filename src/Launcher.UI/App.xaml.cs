@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Media;
 using Launcher.Authentication;
@@ -52,6 +53,14 @@ public partial class App : Application
             args.SetObserved();
         };
 
+        // Uninstaller mode: launched from Windows' Apps & Features (or manually
+        // with --uninstall). Shows a minimal window instead of the main app.
+        if (e.Args.Any(a => a is "--uninstall" or "/uninstall" or "-uninstall"))
+        {
+            RunUninstallMode();
+            return;
+        }
+
         try
         {
             base.OnStartup(e);
@@ -81,6 +90,27 @@ public partial class App : Application
                 $"Stack Trace:\n{ex.StackTrace}\n\n");
             MessageBox.Show($"Startup failed: {ex.Message}\n\n{ex.StackTrace}", "FoxLauncher Error", MessageBoxButton.OK, MessageBoxImage.Error);
             Current.Shutdown();
+        }
+    }
+
+    /// <summary>
+    /// Runs the graphical uninstaller. Kept deliberately light: no service hub or
+    /// settings are loaded, just the data paths and the uninstall window.
+    /// </summary>
+    private void RunUninstallMode()
+    {
+        try
+        {
+            Paths.Initialize();
+            var window = new UninstallWindow();
+            MainWindow = window;
+            window.Show();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"The uninstaller could not start: {ex.Message}", "FoxLauncher",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown();
         }
     }
 

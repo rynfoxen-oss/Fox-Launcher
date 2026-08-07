@@ -23,6 +23,7 @@ public sealed class ModrinthApi
         int limit = 30,
         string index = "relevance",
         string? category = null,
+        int offset = 0,
         CancellationToken ct = default)
     {
         var facets = new List<string>();
@@ -42,7 +43,7 @@ public sealed class ModrinthApi
         var facetQuery = facets.Count > 0
             ? $"&facets={Uri.EscapeDataString($"[{string.Join(",", facets)}]") }"
             : string.Empty;
-        var url = $"{Api}/search?query={Uri.EscapeDataString(query)}&limit={limit}&index={Uri.EscapeDataString(index)}{facetQuery}";
+        var url = $"{Api}/search?query={Uri.EscapeDataString(query)}&limit={limit}&offset={offset}&index={Uri.EscapeDataString(index)}{facetQuery}";
         var raw = await _http.GetStringAsync(url, ct);
         return Json.DeserializeApi<ModrinthSearchResult>(raw) ?? new();
     }

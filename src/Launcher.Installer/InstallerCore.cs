@@ -175,7 +175,6 @@ internal static class InstallerCore
         {
             using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\FoxLauncher");
             if (key is null) return;
-            var script = Path.Combine(installDir, "uninstall.cmd");
             key.SetValue("DisplayName", "FoxLauncher");
             key.SetValue("DisplayVersion", InstallerInfo.Version);
             key.SetValue("Publisher", "FoxLauncher");
@@ -183,7 +182,9 @@ internal static class InstallerCore
             key.SetValue("InstallLocation", installDir);
             key.SetValue("NoModify", 1);
             key.SetValue("NoRepair", 1);
-            key.SetValue("UninstallString", $"cmd /c \"\"{script}\"\"");
+            // Launch the launcher itself in uninstall mode so Windows' Apps &
+            // Features shows the graphical "delete everything" dialog.
+            key.SetValue("UninstallString", $"\"{exePath}\" --uninstall");
         }
         catch
         {

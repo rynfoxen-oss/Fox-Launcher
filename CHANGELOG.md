@@ -10,10 +10,14 @@ and uses [Semantic Versioning](https://semver.org/).
 - Redesigned the Settings page with a left-hand navigation (Game, Appearance, General, About) and grouped option cards.
 - Added language selection (English, Vietnamese, French, German, Spanish, Russian, Chinese, Japanese).
 - Added download thread count control, background music toggle with volume slider, and a "create desktop shortcut" option.
+- Added a Performance settings section with "reduce UI effects", a GC pause time slider, pre-touch and multi-core flags, and custom JVM arguments.
+- Upgraded the Modrinth browser with paginated results ("Show more"), category chips, richer mod cards (follows count + category badges), and a filter box for installed mods.
+- Added a graphical uninstaller that runs from Windows' Apps & Features and lets you choose whether to delete all data (instances, worlds, mods, settings, accounts).
 
 ### Fixed
 - Fixed mod list scrolling in the Mods tab so the Installed and Browse Modrinth lists scroll independently and reliably.
 - Removed the broken global mouse-wheel routing that hijacked scrolling across the Mods page and the mod installer window.
+- Removed the double scrollbar on the Mods page and made both lists virtualized.
 
 ## [1.1.4] - 2026-08-06
 ### Added

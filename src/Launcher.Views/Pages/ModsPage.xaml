@@ -221,18 +221,13 @@
                 </StackPanel>
             </StackPanel>
 
-            <!-- Sort + category (browse tab only) -->
+            <!-- Sort (browse tab only) -->
             <StackPanel Orientation="Horizontal" Margin="0,10,0,16"
                         Visibility="{Binding IsBrowseVisible, Converter={StaticResource BoolToVisibility}}">
-                <StackPanel Orientation="Horizontal" Margin="0,0,16,0">
+                <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Sort by" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <ComboBox ItemsSource="{Binding SortOptions}" SelectedItem="{Binding SelectedSort}"
                               Style="{StaticResource InputComboBox}" Width="180"/>
-                </StackPanel>
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="Category" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <ComboBox ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory}"
-                              Style="{StaticResource InputComboBox}" Width="200"/>
                 </StackPanel>
             </StackPanel>
         </StackPanel>
@@ -265,9 +260,31 @@
                     <Grid Visibility="{Binding IsInstalledVisible, Converter={StaticResource BoolToVisibility}}">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
-                        <Border Grid.Row="0" Margin="0,0,0,10">
+                        <TextBox Grid.Row="0" Text="{Binding InstalledFilter, UpdateSourceTrigger=PropertyChanged}"
+                                 VerticalContentAlignment="Center" Margin="0,0,0,10"
+                                 Visibility="{Binding Mods.Count, Converter={StaticResource BoolToVisibility}}">
+                            <TextBox.Style>
+                                <Style TargetType="TextBox" BasedOn="{StaticResource InputTextBox}">
+                                    <Style.Triggers>
+                                        <Trigger Property="Text" Value="">
+                                            <Setter Property="Background">
+                                                <Setter.Value>
+                                                    <VisualBrush Stretch="None">
+                                                        <VisualBrush.Visual>
+                                                            <TextBlock Text="Filter installed mods..." Foreground="{StaticResource TextSecondary}" FontStyle="Italic" Margin="5,0,0,0"/>
+                                                        </VisualBrush.Visual>
+                                                    </VisualBrush>
+                                                </Setter.Value>
+                                                </Setter>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBox.Style>
+                        </TextBox>
+                        <Border Grid.Row="1" Margin="0,0,0,10">
                                 <Border.Style>
                                     <Style TargetType="Border" BasedOn="{StaticResource CardPanel}">
                                         <Setter Property="Padding" Value="16"/>
@@ -285,7 +302,12 @@
                                                Style="{StaticResource MutedText}" Margin="0,6,0,0"/>
                                 </StackPanel>
                             </Border>
-                            <ListBox x:Name="InstalledList" ItemsSource="{Binding Mods}"
+                            <Border Grid.Row="1" Margin="0,0,0,10" Padding="16"
+                                    Style="{StaticResource CardPanel}"
+                                    Visibility="{Binding InstalledFilterEmpty, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="No installed mods match your filter." Style="{StaticResource MutedText}"/>
+                            </Border>
+                            <ListBox x:Name="InstalledList" ItemsSource="{Binding FilteredMods}"
                                      SelectedItem="{Binding SelectedMod, Mode=TwoWay}"
                                      SelectionMode="Multiple"
                                      SelectionChanged="InstalledList_SelectionChanged"
@@ -293,12 +315,12 @@
                                      ScrollViewer.VerticalScrollBarVisibility="Auto"
                                      ScrollViewer.CanContentScroll="True"
                                      VirtualizingPanel.IsVirtualizing="True"
-                                     VirtualizingPanel.VirtualizationMode="Recycling">
+                                     VirtualizingPanel.VirtualizationMode="Recycling" Grid.Row="2">
                                     <ListBox.Style>
                                         <Style TargetType="ListBox" BasedOn="{StaticResource PlainListBox}">
                                             <Setter Property="Visibility" Value="Visible"/>
                                             <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Mods.Count}" Value="0">
+                                                <DataTrigger Binding="{Binding FilteredMods.Count}" Value="0">
                                                     <Setter Property="Visibility" Value="Collapsed"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
@@ -375,9 +397,29 @@
                     <Grid Visibility="{Binding IsBrowseVisible, Converter={StaticResource BoolToVisibility}}">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
-                        <Border Grid.Row="0" Margin="0,0,0,10">
+
+                        <!-- Category chips -->
+                        <ItemsControl Grid.Row="0" ItemsSource="{Binding CategoryChips}" Margin="0,0,0,10">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <RadioButton Style="{StaticResource TabPill}" GroupName="BrowseCategory" Margin="0,0,6,6"
+                                                 IsChecked="{Binding IsSelected, Mode=TwoWay}" Click="CategoryChip_Click">
+                                        <TextBlock Text="{Binding Name}" FontSize="12"/>
+                                    </RadioButton>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Border Grid.Row="1" Margin="0,0,0,10">
                                 <Border.Style>
                                     <Style TargetType="Border" BasedOn="{StaticResource CardPanel}">
                                         <Setter Property="Padding" Value="16"/>
@@ -400,7 +442,7 @@
                                 </StackPanel>
                             </Border>
                             <ListBox x:Name="BrowseList" ItemsSource="{Binding SearchResults}" SelectedItem="{Binding SelectedResult, Mode=TwoWay}"
-                                     MaxHeight="520"
+                                     Grid.Row="2" MaxHeight="520"
                                      ScrollViewer.VerticalScrollBarVisibility="Auto"
                                      ScrollViewer.CanContentScroll="True"
                                      VirtualizingPanel.IsVirtualizing="True"
@@ -443,11 +485,26 @@
                                                         <TextBlock Text="{Binding Author}" Style="{StaticResource CaptionText}"/>
                                                         <TextBlock Text="{Binding Downloads, Converter={StaticResource CompactNumber}, StringFormat='  {0} downloads'}"
                                                                    Style="{StaticResource CaptionText}"/>
-                                                        <TextBlock Text="{Binding LatestVersion, StringFormat='  Latest: {0}'}"
-                                                                   Style="{StaticResource CaptionText}" Foreground="{StaticResource AccentBrush}"/>
+                                                        <TextBlock Text="{Binding Follows, Converter={StaticResource CompactNumber}, StringFormat='  {0} follows'}"
+                                                                   Style="{StaticResource CaptionText}" Visibility="{Binding Follows, Converter={StaticResource BoolToVisibility}}"/>
                                                         <TextBlock Text="{Binding DateModified, Converter={StaticResource RelativeTime}, StringFormat='  Updated {0}'}"
                                                                    Style="{StaticResource CaptionText}"/>
                                                     </StackPanel>
+                                                    <ItemsControl ItemsSource="{Binding Badges}" Margin="0,6,0,0">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <WrapPanel/>
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border Style="{StaticResource ModBadge}" Background="{StaticResource SurfaceBrush}"
+                                                                        Margin="0,0,6,0" HorizontalAlignment="Left">
+                                                                    <TextBlock Text="{Binding}" FontSize="10" Foreground="{StaticResource TextSecondary}"/>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="2" VerticalAlignment="Center">
                                                     <Button Content="Details" Style="{StaticResource GhostButton}"
@@ -465,6 +522,16 @@
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                             </ListBox>
+
+                            <!-- Load more -->
+                            <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,6,0,0"
+                                        Visibility="{Binding HasMore, Converter={StaticResource BoolToVisibility}}">
+                                <Button Content="Show more" Style="{StaticResource GhostButton}"
+                                        Command="{Binding LoadMoreCommand}"
+                                        IsEnabled="{Binding IsLoadingMore, Converter={StaticResource InverseBoolean}}"/>
+                                <TextBlock Text="Loading..." Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="10,0,0,0"
+                                           Visibility="{Binding IsLoadingMore, Converter={StaticResource BoolToVisibility}}"/>
+                            </StackPanel>
                         </Grid>
                 </Grid>
             </Grid>

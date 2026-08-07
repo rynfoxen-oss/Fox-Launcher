@@ -34,6 +34,14 @@ public sealed class ModsViewModel : ViewModelBase
     private bool _isImporting;
     private bool _installedTab = true;
     private bool _browseTab;
+    private bool _hasMore;
+    private bool _isLoadingMore;
+    private int _searchOffset;
+    private string _installedFilter = "";
+    private IReadOnlyList<ModInfo> _filteredMods = Array.Empty<ModInfo>();
+    private IReadOnlyList<CategoryOption> _categoryChips = new[] { AllCategories };
+
+    private static readonly CategoryOption AllCategories = new("All categories", "");
 
     public ModsViewModel(ServiceHub services) : base(services)
     {
@@ -66,6 +74,7 @@ public sealed class ModsViewModel : ViewModelBase
         ShowInstalledCommand = new RelayCommand(() => { InstalledTab = true; });
         ShowBrowseCommand = new RelayCommand(() => ShowBrowseTab());
         OpenModrinthCommand = new RelayCommand(OpenModrinth);
+        LoadMoreCommand = new AsyncRelayCommand(LoadMoreAsync);
 
         PropertyChanged += (_, e) =>
         {
@@ -90,12 +99,29 @@ public sealed class ModsViewModel : ViewModelBase
         public override string ToString() => Label;
     }
 
-    public sealed class CategoryOption
+    public sealed class CategoryOption : System.ComponentModel.INotifyPropertyChanged
     {
+        private bool _isSelected;
+
         public CategoryOption(string name, string slug) { Name = name; Slug = slug; }
         public string Name { get; }
         public string Slug { get; }
+
+        /// <summary>Selected state for category chips.</summary>
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set
+            {
+                if (_isSelected == value) return;
+                _isSelected = value;
+                PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsSelected)));
+            }
+        }
+
         public override string ToString() => Name;
+
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
     }
 
     public IReadOnlyList<SortOption> SortOptions { get; } = new[]
@@ -124,10 +150,15 @@ public sealed class ModsViewModel : ViewModelBase
         get => _selectedCategory;
         set
         {
-            if (SetProperty(ref _selectedCategory, value) && SearchResults.Count > 0)
+            if (SetProperty(ref _selectedCategory, value))
             {
-                _searchCts?.Cancel();
-                _ = SearchAsync();
+                foreach (var chip in _categoryChips)
+                    chip.IsSelected = ReferenceEquals(chip, value);
+                if (SearchResults.Count > 0)
+                {
+                    _searchCts?.Cancel();
+                    _ = SearchAsync();
+                }
             }
         }
     }
@@ -136,6 +167,13 @@ public sealed class ModsViewModel : ViewModelBase
     {
         get => _categories;
         private set => SetProperty(ref _categories, value);
+    }
+
+    /// <summary>Category chips shown in the browse tab (excludes loader tags).</summary>
+    public IReadOnlyList<CategoryOption> CategoryChips
+    {
+        get => _categoryChips;
+        private set => SetProperty(ref _categoryChips, value);
     }
 
     public AsyncRelayCommand SearchCommand { get; }
@@ -162,11 +200,35 @@ public sealed class ModsViewModel : ViewModelBase
     public RelayCommand ShowInstalledCommand { get; }
     public RelayCommand ShowBrowseCommand { get; }
     public RelayCommand OpenModrinthCommand { get; }
+    public AsyncRelayCommand LoadMoreCommand { get; }
 
     public IReadOnlyList<ModInfo> Mods
     {
         get => _mods;
         private set => SetProperty(ref _mods, value);
+    }
+
+    /// <summary>Installed mods filtered by <see cref="InstalledFilter"/>.</summary>
+    public IReadOnlyList<ModInfo> FilteredMods
+    {
+        get => _filteredMods;
+        private set
+        {
+            if (SetProperty(ref _filteredMods, value)) OnPropertyChanged(nameof(InstalledFilterEmpty));
+        }
+    }
+
+    /// <summary>True when installed mods exist but none match the active filter.</summary>
+    public bool InstalledFilterEmpty => _mods.Count > 0 && _filteredMods.Count == 0;
+
+    /// <summary>Text used to filter the installed mods list.</summary>
+    public string InstalledFilter
+    {
+        get => _installedFilter;
+        set
+        {
+            if (SetProperty(ref _installedFilter, value)) ApplyInstalledFilter();
+        }
     }
 
     public ModInfo? SelectedMod
@@ -235,6 +297,19 @@ public sealed class ModsViewModel : ViewModelBase
     {
         get => _hasSearched;
         private set => SetProperty(ref _hasSearched, value);
+    }
+
+    /// <summary>True when more search results can be loaded.</summary>
+    public bool HasMore
+    {
+        get => _hasMore;
+        private set => SetProperty(ref _hasMore, value);
+    }
+
+    public bool IsLoadingMore
+    {
+        get => _isLoadingMore;
+        private set => SetProperty(ref _isLoadingMore, value);
     }
 
     public string Status
@@ -353,7 +428,20 @@ public sealed class ModsViewModel : ViewModelBase
     private ModLoaderType Loader => Services.Container.Resolve<MainViewModel>().SelectedInstance?.Loader ?? ModLoaderType.Vanilla;
     private string? GameVersion => Services.Container.Resolve<MainViewModel>().SelectedInstance?.GameVersion;
 
-    public void Refresh() => Mods = InstanceId is null ? Array.Empty<ModInfo>() : Services.Mods.ListMods(InstanceId);
+    public void Refresh()
+    {
+        Mods = InstanceId is null ? Array.Empty<ModInfo>() : Services.Mods.ListMods(InstanceId);
+        OnPropertyChanged(nameof(InstalledFilterEmpty));
+        ApplyInstalledFilter();
+    }
+
+    private void ApplyInstalledFilter()
+    {
+        var query = _installedFilter?.Trim();
+        FilteredMods = string.IsNullOrEmpty(query)
+            ? Mods
+            : Mods.Where(m => (m.Title ?? m.FileName).Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
 
     private void RefreshInstancesList()
     {
@@ -394,14 +482,22 @@ public sealed class ModsViewModel : ViewModelBase
         }
         catch (TaskCanceledException) { return; }
 
-        if (string.IsNullOrWhiteSpace(SearchQuery))
+        try
         {
-            SearchResults = Array.Empty<ModSearcher.SearchRow>();
-            HasSearched = false;
-            Status = "Type to search Modrinth for mods compatible with the selected instance.";
-            return;
+            if (string.IsNullOrWhiteSpace(SearchQuery))
+            {
+                SearchResults = Array.Empty<ModSearcher.SearchRow>();
+                HasSearched = false;
+                Status = "Type to search Modrinth for mods compatible with the selected instance.";
+                if (IsBrowseVisible && InstanceId is not null)
+                    await SearchAsync(cts.Token);
+            }
+            else
+            {
+                await SearchAsync(cts.Token);
+            }
         }
-        await SearchAsync(cts.Token);
+        catch (OperationCanceledException) { }
     }
 
     private async Task SearchAsync(CancellationToken ct = default)
@@ -414,24 +510,21 @@ public sealed class ModsViewModel : ViewModelBase
         var query = SearchQuery?.Trim();
         IsSearching = true;
         HasSearched = true;
+        HasMore = false;
+        IsLoadingMore = false;
         Status = string.IsNullOrWhiteSpace(query) ? "Loading popular mods..." : "Searching Modrinth...";
         try
         {
-            var results = await Services.ModSearch.SearchAsync(
-                query ?? "", Loader, GameVersion,
-                SelectedSort?.Value ?? "relevance",
-                SelectedCategory?.Slug, ct);
-
-            var installed = Services.Mods.InstalledProjectIds(InstanceId);
-            foreach (var row in results) row.Installed = installed.Contains(row.ProjectId);
-
+            var results = await FetchPageAsync(0, ct);
             if (ct.IsCancellationRequested) return;
             SearchResults = results;
-            Status = SearchResults.Count == 0
+            _searchOffset = results.Count;
+            HasMore = results.Count >= ModSearcher.PageSize;
+            Status = results.Count == 0
                 ? "No mods found. Try a different query, sort or category."
                 : string.IsNullOrWhiteSpace(query)
-                    ? $"Showing {SearchResults.Count} popular mods for {Loader} {GameVersion}."
-                    : $"{SearchResults.Count} mods found.";
+                    ? $"Showing {results.Count} popular mods for {Loader} {GameVersion}."
+                    : $"{results.Count} mods found.";
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -442,6 +535,51 @@ public sealed class ModsViewModel : ViewModelBase
             IsSearching = false;
         }
     }
+
+    /// <summary>Fetches one page of search results at the given offset and marks
+    /// which are already installed in the current instance.</summary>
+    private async Task<List<ModSearcher.SearchRow>> FetchPageAsync(int offset, CancellationToken ct)
+    {
+        var results = await Services.ModSearch.SearchAsync(
+            SearchQuery?.Trim() ?? "", Loader, GameVersion,
+            SelectedSort?.Value ?? "relevance",
+            SelectedCategory?.Slug, offset, ct);
+
+        var installed = Services.Mods.InstalledProjectIds(InstanceId!);
+        foreach (var row in results) row.Installed = installed.Contains(row.ProjectId);
+        return results;
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        if (InstanceId is null || IsSearching || IsLoadingMore || !HasMore) return;
+        var key = CurrentSearchKey;
+        IsLoadingMore = true;
+        Status = "Loading more mods...";
+        try
+        {
+            var next = await FetchPageAsync(_searchOffset, CancellationToken.None);
+            if (key != CurrentSearchKey) return;
+            var combined = new List<ModSearcher.SearchRow>(SearchResults);
+            combined.AddRange(next);
+            SearchResults = combined;
+            _searchOffset = combined.Count;
+            HasMore = next.Count >= ModSearcher.PageSize;
+            Status = $"{combined.Count} mods found.";
+        }
+        catch (Exception ex)
+        {
+            Status = $"Search failed: {ex.Message}";
+        }
+        finally
+        {
+            IsLoadingMore = false;
+        }
+    }
+
+    /// <summary>Identifies the current search so stale "load more" responses are dropped.</summary>
+    private string CurrentSearchKey =>
+        $"{InstanceId}|{Loader}|{GameVersion}|{SearchQuery?.Trim() ?? ""}|{SelectedSort?.Value ?? ""}|{SelectedCategory?.Slug ?? ""}";
 
     private void ShowBrowseTab()
     {
@@ -454,10 +592,16 @@ public sealed class ModsViewModel : ViewModelBase
     {
         try
         {
-            var list = new List<CategoryOption> { new("All categories", "") };
+            var list = new List<CategoryOption> { AllCategories };
             var fetched = await Services.Modrinth.GetCategoriesAsync();
             list.AddRange(fetched.OrderBy(c => c.Name).Select(c => new CategoryOption(c.Name, c.Short)));
             Categories = list;
+            CategoryChips = list
+                .Where(c => c.Slug is not ("fabric" or "forge" or "neoforge" or "quilt"))
+                .Take(13)
+                .ToList();
+            foreach (var chip in _categoryChips)
+                chip.IsSelected = ReferenceEquals(chip, _selectedCategory);
         }
         catch { /* best-effort */ }
     }

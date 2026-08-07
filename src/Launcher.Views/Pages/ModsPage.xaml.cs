@@ -42,4 +42,13 @@ public partial class ModsPage : UserControl
         menu.PlacementTarget = (UIElement)sender;
         menu.IsOpen = true;
     }
+
+    private void CategoryChip_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is RadioButton { DataContext: ModsViewModel.CategoryOption option } &&
+            DataContext is ModsViewModel vm)
+        {
+            vm.SelectedCategory = option;
+        }
+    }
 }

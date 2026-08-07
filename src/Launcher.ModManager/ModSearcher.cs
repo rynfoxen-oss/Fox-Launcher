@@ -29,6 +29,12 @@ public sealed class ModSearcher
         public string? LatestVersion { get; set; }
         public DateTimeOffset DateModified { get; set; }
         public bool Installed { get; set; }
+
+        /// <summary>Mod categories shown as badges in the browse list, excluding loader tags.</summary>
+        public IReadOnlyList<string> Badges => Categories
+            .Where(c => c is not ("fabric" or "forge" or "neoforge" or "quilt"))
+            .Take(3)
+            .ToList();
     }
 
     /// <summary>Autocomplete suggestion.</summary>
@@ -54,13 +60,16 @@ public sealed class ModSearcher
         "storage", "decoration", "minimap", "cosmetic", "multiplayer", "api"
     };
 
+    /// <summary>Number of results requested per page.</summary>
+    public const int PageSize = 40;
+
     /// <summary>Searches Modrinth with optional loader, game version and category
     /// filters, sorted by the given index.</summary>
     public async Task<List<SearchRow>> SearchAsync(
         string query, ModLoaderType loader, string? gameVersion,
-        string index = "relevance", string? category = null, CancellationToken ct = default)
+        string index = "relevance", string? category = null, int offset = 0, CancellationToken ct = default)
     {
-        var result = await _api.SearchAsync(query, loader, gameVersion, 40, index, category, ct);
+        var result = await _api.SearchAsync(query, loader, gameVersion, PageSize, index, category, offset, ct);
         return result.Hits.Select(h => new SearchRow
         {
             ProjectId = h.ProjectId,
