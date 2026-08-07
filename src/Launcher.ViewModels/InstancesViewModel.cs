@@ -39,8 +39,6 @@ public sealed class InstancesViewModel : ViewModelBase
             Refresh();
             if (_activeId is not null) SelectedId = _activeId;
         });
-        services.Events.Subscribe<GameLaunchedEvent>(_ => PlayCommand.RaiseCanExecuteChanged());
-        services.Events.Subscribe<GameExitedEvent>(_ => PlayCommand.RaiseCanExecuteChanged());
 
         CreateCommand = new RelayCommand(() => IsCreating = true);
         CancelCreateCommand = new RelayCommand(() => IsCreating = false);
@@ -54,6 +52,9 @@ public sealed class InstancesViewModel : ViewModelBase
         SelectCommand = new RelayCommand(Select);
         LoadLoaderVersionsCommand = new AsyncRelayCommand(LoadLoaderVersionsAsync);
         RefreshVersionsCommand = new RelayCommand(() => _ = LoadGameVersionsAsync());
+
+        services.Events.Subscribe<GameLaunchedEvent>(_ => PlayCommand.RaiseCanExecuteChanged());
+        services.Events.Subscribe<GameExitedEvent>(_ => PlayCommand.RaiseCanExecuteChanged());
 
         _ = LoadGameVersionsAsync();
     }

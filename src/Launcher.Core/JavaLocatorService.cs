@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using System.Text.Json.Serialization;
 using Launcher.Models;
 using Launcher.Utils;
@@ -41,7 +42,10 @@ public sealed class JavaLocatorService
         }
 
         // Registry
-        candidates.AddRange(ProbeRegistry());
+        if (OperatingSystem.IsWindows())
+        {
+            candidates.AddRange(ProbeRegistry());
+        }
 
         // Common install directories
         var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
@@ -91,6 +95,7 @@ public sealed class JavaLocatorService
         return FindJava(preferredMajor ?? JavaRequirements.ForGameVersion(gameVersion));
     }
 
+    [SupportedOSPlatform("windows")]
     private static IEnumerable<JavaRuntime> ProbeRegistry()
     {
         var results = new List<JavaRuntime>();

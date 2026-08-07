@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Launcher.Models;
 using Launcher.Network;
 using Launcher.Services;
@@ -12,14 +13,12 @@ public sealed class UpdateService
 {
     private readonly GitHubApi _github;
     private readonly Http _http;
-    private readonly SettingsService _settings;
     private readonly LogService _log;
 
-    public UpdateService(GitHubApi github, Http http, SettingsService settings, LogService log)
+    public UpdateService(GitHubApi github, Http http, LogService log)
     {
         _github = github;
         _http = http;
-        _settings = settings;
         _log = log;
     }
 
@@ -44,15 +43,106 @@ public sealed class UpdateService
     /// <summary>
     /// Downloads the update to a temporary file and launches a detached updater
     /// script that waits for the launcher to exit and replaces the executable.
+    /// Verifies the download against the release asset's SHA-256 when available,
+    /// so a truncated or corrupted binary can never be installed.
     /// </summary>
     public async Task<string?> DownloadUpdateAsync(UpdateInfo info, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(info.DownloadUrl)) return null;
-        var target = Path.Combine(Path.GetTempPath(), $"FoxLauncher-{info.LatestVersion}.exe");
-        var bytes = await _http.GetBytesAsync(info.DownloadUrl, ct);
-        await File.WriteAllBytesAsync(target, bytes, ct);
-        _log.Info($"Downloaded update {info.LatestVersion} to {target}");
-        return target;
+        var target = Path.Combine(Path.GetTempPath(), $"FoxLauncher-v{info.LatestVersion}.exe");
+
+        try
+        {
+            if (info.DownloadUrl.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+            {
+                // Already on disk (a previously downloaded update that failed to
+                // apply). Stage it under the standard temp name and use it directly.
+                if (Uri.TryCreate(info.DownloadUrl, UriKind.Absolute, out var uri) &&
+                    File.Exists(uri.LocalPath))
+                {
+                    if (!string.Equals(
+                            Path.GetFullPath(uri.LocalPath), Path.GetFullPath(target),
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        await File.WriteAllBytesAsync(target, await File.ReadAllBytesAsync(uri.LocalPath, ct), ct);
+                    }
+                }
+                else
+                {
+                    return null;
+                }
+            }
+            else
+            {
+                var bytes = await _http.GetBytesAsync(info.DownloadUrl, ct);
+                if (info.Sha256 is { Length: > 0 } &&
+                    !string.Equals(HashBytes(bytes), info.Sha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    _log.Warn($"Update download failed SHA-256 verification (expected {info.Sha256}).");
+                    TryDelete(target);
+                    return null;
+                }
+                await File.WriteAllBytesAsync(target, bytes, ct);
+            }
+
+            _log.Info($"Downloaded update {info.LatestVersion} to {target}");
+            return target;
+        }
+        catch (Exception ex)
+        {
+            _log.Warn($"Update download failed: {ex.Message}");
+            TryDelete(target);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Finds a newer update binary already downloaded on this computer (left over
+    /// when a previous apply failed). Returns null when nothing usable is present.
+    /// </summary>
+    public UpdateInfo? FindPendingUpdate()
+    {
+        try
+        {
+            var root = Path.GetTempPath();
+            var best = Directory
+                .GetFiles(root, "FoxLauncher-v*.exe", SearchOption.TopDirectoryOnly)
+                .Select(p => new FileInfo(p))
+                .Where(f => f.Exists)
+                .OrderByDescending(f => f.LastWriteTimeUtc)
+                .FirstOrDefault();
+            if (best is null) return null;
+
+            var name = Path.GetFileNameWithoutExtension(best.Name);
+            if (!name.StartsWith("FoxLauncher-v", StringComparison.OrdinalIgnoreCase)) return null;
+            var version = name["FoxLauncher-v".Length..];
+
+            var info = new UpdateInfo
+            {
+                LatestVersion = version,
+                DownloadUrl = new Uri(best.FullName).AbsoluteUri,
+                Notes = $"A downloaded update (v{version}) was found on this computer but " +
+                        "was not applied last time. Install it now to get the latest fixes.",
+                ReleasedAt = best.LastWriteTimeUtc
+            };
+            return info.IsUpdateAvailable ? info : null;
+        }
+        catch (Exception ex)
+        {
+            _log.Warn($"Pending update scan failed: {ex.Message}");
+            return null;
+        }
+    }
+
+    private static string HashBytes(byte[] bytes)
+    {
+        using var sha = SHA256.Create();
+        return Convert.ToHexString(sha.ComputeHash(bytes)).ToLowerInvariant();
+    }
+
+    private static void TryDelete(string path)
+    {
+        try { File.Delete(path); } catch { /* best-effort cleanup */ }
     }
 
     /// <summary>

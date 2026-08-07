@@ -1,8 +1,10 @@
+using System.Runtime.Versioning;
 using Launcher.Models;
 
 namespace Launcher.Services;
 
 /// <summary>Creates desktop and start-menu shortcuts for the launcher.</summary>
+[SupportedOSPlatform("windows")]
 public static class ShortcutService
 {
     /// <summary>Creates a desktop shortcut pointing at the launcher exe.</summary>

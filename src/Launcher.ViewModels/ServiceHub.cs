@@ -81,6 +81,9 @@ public sealed class ServiceHub
     /// <summary>Shows the update announcement dialog for an available release (wired by the UI layer).</summary>
     public Action<UpdateInfo>? OpenUpdateDialog { get; set; }
 
+    /// <summary>Shows the crash report viewer for an analyzed crash (wired by the UI layer).</summary>
+    public Action<CrashAnalysis>? OpenCrashReport { get; set; }
+
     /// <summary>Copies text to the clipboard (wired by the UI layer).</summary>
     public static Action<string>? ClipboardSetter { get; set; }
 }

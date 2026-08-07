@@ -26,21 +26,6 @@ public sealed class GitHubApi
         }
     }
 
-    /// <summary>Fetches the latest pre-release too (used when auto-update channel is "beta").</summary>
-    public async Task<GitHubRelease?> GetLatestPreReleaseAsync(string repository, CancellationToken ct = default)
-    {
-        try
-        {
-            var raw = await _http.GetStringAsync($"{Api}/{repository}/releases", ct);
-            var releases = Json.DeserializeApi<List<GitHubRelease>>(raw) ?? new();
-            return releases.FirstOrDefault();
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
     /// <summary>Builds an <see cref="UpdateInfo"/> from a release.</summary>
     public static UpdateInfo ToUpdateInfo(GitHubRelease release)
     {
@@ -52,6 +37,7 @@ public sealed class GitHubApi
         {
             LatestVersion = release.TagName ?? "",
             DownloadUrl = asset?.BrowserDownloadUrl,
+            Sha256 = asset?.Digest,
             Notes = release.Body,
             ReleasedAt = release.PublishedAt
         };
@@ -75,4 +61,5 @@ public sealed class GitHubAsset
     [JsonPropertyName("name")] public string? Name { get; set; }
     [JsonPropertyName("browser_download_url")] public string? BrowserDownloadUrl { get; set; }
     [JsonPropertyName("size")] public long Size { get; set; }
+    [JsonPropertyName("digest")] public string? Digest { get; set; }
 }

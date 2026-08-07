@@ -6,7 +6,7 @@ using Launcher.Utils;
 namespace Launcher.ViewModels;
 
 /// <summary>
-/// Settings page. Binds directly to <see cref="Services.Settings"/> values so
+/// Settings page. Binds directly to <see cref="ServiceHub.Settings"/> values so
 /// the UI updates immediately and persists on every change.
 /// </summary>
 public sealed class SettingsViewModel : ViewModelBase
@@ -23,6 +23,11 @@ public sealed class SettingsViewModel : ViewModelBase
         OpenLogsFolderCommand = new RelayCommand(() => ProcessHelper.Open(Paths.Logs));
         CreateShortcutCommand = new RelayCommand(() =>
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                Services.ShowMessage?.Invoke("FoxLauncher", "Shortcuts are only supported on Windows.");
+                return;
+            }
             var ok = ShortcutService.CreateDesktopShortcut();
             Services.ShowMessage?.Invoke("FoxLauncher", ok ? "Desktop shortcut created." : "Could not create the shortcut.");
         });
@@ -125,6 +130,7 @@ public sealed class SettingsViewModel : ViewModelBase
         try
         {
             var info = await Services.Updater.CheckForUpdateAsync();
+            info ??= Services.Updater.FindPendingUpdate();
             if (info is null)
             {
                 UpdateStatus = $"You are running the latest version ({AppVersion}).";

@@ -5,6 +5,7 @@ public sealed class GameProcess
 {
     private readonly global::System.Diagnostics.Process _process;
     private readonly StreamWriter? _logWriter;
+    private volatile bool _killed;
     public GameProcess(global::System.Diagnostics.Process process, StreamWriter? logWriter, string gameVersion, string instanceName)
     {
         _process = process;
@@ -15,6 +16,9 @@ public sealed class GameProcess
 
     public string GameVersion { get; }
     public string InstanceName { get; }
+
+    /// <summary>True when the game was stopped by the launcher (not a crash).</summary>
+    public bool WasKilled => _killed;
 
     public int Id => _process.Id;
 
@@ -93,6 +97,7 @@ public sealed class GameProcess
 
     public void Kill()
     {
+        _killed = true;
         try
         {
             if (!_process.HasExited) _process.Kill(entireProcessTree: true);
@@ -126,7 +131,11 @@ public sealed class GameExitedEvent
     public string InstanceId { get; set; } = "";
     public int ExitCode { get; set; }
     public bool Crashed { get; set; }
+    public bool Stopped { get; set; }
     public string? CrashReportPath { get; set; }
+
+    /// <summary>Human-readable reason when the game crashed without a crash report.</summary>
+    public string? FailureDetail { get; set; }
 }
 
 /// <summary>Raised when the launcher's selected instance changes.</summary>

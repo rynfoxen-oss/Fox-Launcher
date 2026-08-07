@@ -27,6 +27,7 @@ public sealed class UpdateInfo
 {
     public string LatestVersion { get; set; } = "";
     public string? DownloadUrl { get; set; }
+    public string? Sha256 { get; set; }
     public string? Notes { get; set; }
     public DateTimeOffset ReleasedAt { get; set; }
 

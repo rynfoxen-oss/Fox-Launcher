@@ -71,8 +71,20 @@ public sealed class MainViewModel : ViewModelBase
         services.Events.Subscribe<GameExitedEvent>(e =>
         {
             IsPlaying = false;
-            Status = $"Game exited (code {e.ExitCode})";
+            LastCrashReportPath = e.Crashed ? e.CrashReportPath : null;
+            Status = e.Stopped ? "Game stopped."
+                : e.Crashed ? $"Game crashed (code {e.ExitCode}). A crash report was saved."
+                : e.ExitCode == 0 ? "Game closed."
+                : e.FailureDetail is { } detail ? $"Game exited with code {e.ExitCode}. {detail}"
+                : $"Game exited with code {e.ExitCode}.";
+
+            // Persist play-time stats recorded by the launcher on this session.
+            if (services.Instances.GetInstance(e.InstanceId) is { } exited)
+            {
+                services.Instances.SaveInstanceMetadata(exited);
+            }
         });
+        OpenCrashReportCommand = new RelayCommand(OpenCrashReport);
     }
 
     public HomeViewModel Home { get; }
@@ -107,7 +119,7 @@ public sealed class MainViewModel : ViewModelBase
                 if (value is not null)
                 {
                     Services.Settings.LastInstanceId = value.Id;
-                    Services.Instances.SaveInstance(value);
+                    Services.Instances.SaveInstanceMetadata(value);
                 }
                 RaiseInstanceChanged();
             }
@@ -151,6 +163,32 @@ public sealed class MainViewModel : ViewModelBase
     {
         get => _isPlaying;
         set => SetProperty(ref _isPlaying, value);
+    }
+
+    private string? _lastCrashReportPath;
+
+    /// <summary>Path of the most recent crash report, when the last exit crashed.</summary>
+    public string? LastCrashReportPath
+    {
+        get => _lastCrashReportPath;
+        private set
+        {
+            if (SetProperty(ref _lastCrashReportPath, value))
+            {
+                OnPropertyChanged(nameof(HasCrashReport));
+            }
+        }
+    }
+
+    public bool HasCrashReport => !string.IsNullOrEmpty(LastCrashReportPath);
+
+    public RelayCommand OpenCrashReportCommand { get; }
+
+    private void OpenCrashReport()
+    {
+        if (string.IsNullOrEmpty(LastCrashReportPath)) return;
+        var analysis = Services.CrashAnalyzer.Analyze(LastCrashReportPath);
+        Services.OpenCrashReport?.Invoke(analysis);
     }
 
     public bool IsSidebarCollapsed

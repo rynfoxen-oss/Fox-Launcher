@@ -248,17 +248,54 @@ public sealed class GameLauncherService
     private void OnGameExited(GameInstance instance, GameProcess process, int exitCode)
     {
         lock (_lock) _running.Remove(instance.Id);
-        var crashReport = FindCrashReport(instance.Id);
-        var crashed = exitCode != 0 && crashReport is not null;
 
-        _log.Info($"Game '{instance.Name}' exited with code {exitCode}{(crashed ? " (crash)" : "")}");
+        var stopped = process.WasKilled;
+        var crashReport = !stopped && exitCode != 0
+            ? FindCrashReport(instance.Id, instance.LastPlayedAt)
+            : null;
+        var crashed = crashReport is not null;
+        var failureDetail = crashed || stopped
+            ? null
+            : exitCode != 0
+                ? FindStartupFailure(instance.Id)
+                : null;
+
+        _log.Info($"Game '{instance.Name}' exited with code {exitCode}" +
+                  $"{(crashed ? " (crash)" : stopped ? " (stopped)" : "")}");
         _events.Publish(new GameExitedEvent
         {
             InstanceId = instance.Id,
             ExitCode = exitCode,
             Crashed = crashed,
-            CrashReportPath = crashReport
+            Stopped = stopped,
+            CrashReportPath = crashReport,
+            FailureDetail = failureDetail
         });
+    }
+
+    /// <summary>
+    /// Reads the tail of the game log for recognizable startup failures so the
+    /// user gets a useful message even when no crash report was written.
+    /// </summary>
+    private static string? FindStartupFailure(string instanceId)
+    {
+        var logPath = Paths.GameLog(instanceId);
+        if (!File.Exists(logPath)) return null;
+        try
+        {
+            var lines = File.ReadLines(logPath).TakeLast(300).ToList();
+            foreach (var line in lines)
+            {
+                if (line.Contains("Could not create the Java Virtual Machine", StringComparison.OrdinalIgnoreCase))
+                    return "The Java Virtual Machine could not start. A JVM option may not be supported by your Java version - try changing the installed Java.";
+                if (line.Contains("A fatal exception has occurred", StringComparison.OrdinalIgnoreCase))
+                    return "The game stopped before it fully started. Check the game log for the JVM error.";
+                if (line.Contains("Error: Main class not found", StringComparison.OrdinalIgnoreCase))
+                    return "The game's main class could not be loaded. The version may be corrupted - try reinstalling it.";
+            }
+        }
+        catch { /* best-effort scan */ }
+        return null;
     }
 
     /// <summary>
@@ -513,11 +550,14 @@ public sealed class GameLauncherService
         }
     }
 
-    private static string? FindCrashReport(string instanceId)
+    private static string? FindCrashReport(string instanceId, DateTimeOffset? since = null)
     {
         var dir = Path.Combine(Paths.InstanceMinecraft(instanceId), "crash-reports");
         if (!Directory.Exists(dir)) return null;
+        DateTime? cutoff = null;
+        if (since is not null && since != DateTimeOffset.MinValue) cutoff = since.Value.UtcDateTime;
         return Directory.GetFiles(dir, "crash-*.txt")
+            .Where(f => cutoff is null || File.GetLastWriteTimeUtc(f) >= cutoff.Value)
             .OrderByDescending(File.GetLastWriteTime)
             .FirstOrDefault();
     }

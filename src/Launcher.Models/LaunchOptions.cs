@@ -1,7 +1,7 @@
 namespace Launcher.Models;
 
 /// <summary>
-/// Everything needed to launch one game session. The <see cref="Core"/> project
+/// Everything needed to launch one game session. The Launcher.Core project
 /// converts this into a java command line.
 /// </summary>
 public sealed class LaunchOptions

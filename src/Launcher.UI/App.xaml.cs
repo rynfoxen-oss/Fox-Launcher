@@ -304,6 +304,11 @@ public partial class App : Application
             var dialog = new UpdateDialog(hub, info) { Owner = MainWindow };
             dialog.ShowDialog();
         };
+        hub.OpenCrashReport = analysis =>
+        {
+            var dialog = new CrashReportDialog(analysis) { Owner = MainWindow };
+            dialog.ShowDialog();
+        };
         ServiceHub.ClipboardSetter = text =>
         {
             try { Clipboard.SetText(text); }
@@ -334,6 +339,7 @@ public partial class App : Application
             try
             {
                 var info = await hub.Updater.CheckForUpdateAsync();
+                info ??= hub.Updater.FindPendingUpdate();
                 if (info is null || !hub.Settings.AutoUpdate) return;
                 Dispatcher.Invoke(() => hub.OpenUpdateDialog?.Invoke(info));
             }

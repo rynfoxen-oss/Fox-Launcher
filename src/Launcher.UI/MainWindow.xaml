@@ -73,7 +73,7 @@
                 <Image Source="pack://application:,,,/assets/icons/fox.ico" Width="18" Height="18"/>
                 <StackPanel Margin="8,0,0,0">
                     <TextBlock Text="FoxLauncher" Style="{StaticResource SectionTitleText}"/>
-                    <TextBlock Text="{Binding AppVersion, FallbackValue='v1.1.7'}" Style="{StaticResource CaptionText}"/>
+                    <TextBlock Text="{Binding AppVersion, FallbackValue='v1.1.8'}" Style="{StaticResource CaptionText}"/>
                 </StackPanel>
             </StackPanel>
             <TextBlock Grid.Column="1" Text="{Binding Status}" Style="{StaticResource CaptionText}"
@@ -192,13 +192,30 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="{Binding Status}" Style="{StaticResource CaptionText}" Margin="14,0,0,0"
                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                <TextBlock Grid.Column="1" Text="{Binding SelectedInstance.Name, StringFormat='Instance: {0}'}"
+                <Button Grid.Column="1" Content="View crash report"
+                        VerticalAlignment="Center"
+                        Command="{Binding OpenCrashReportCommand}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource GhostButton}">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Setter Property="Margin" Value="0,5,10,5"/>
+                            <Setter Property="Padding" Value="10,2"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasCrashReport}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <TextBlock Grid.Column="2" Text="{Binding SelectedInstance.Name, StringFormat='Instance: {0}'}"
                            Style="{StaticResource CaptionText}" Margin="0,0,14,0" VerticalAlignment="Center"
                            Visibility="{Binding SelectedInstance, Converter={StaticResource NullToVisibility}, ConverterParameter=invert}"/>
-                <TextBlock Grid.Column="2" Text="Playing"
+                <TextBlock Grid.Column="3" Text="Playing"
                            Foreground="{DynamicResource SuccessBrush}" VerticalAlignment="Center"
                            Margin="0,0,14,0">
                     <TextBlock.Style>

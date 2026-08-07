@@ -72,6 +72,16 @@ public sealed class InstanceManagerService
         Changed?.Invoke();
     }
 
+    /// <summary>
+    /// Persists instance metadata without re-reading the whole instance list or
+    /// raising <see cref="Changed"/>. Used for lightweight updates (selection,
+    /// play-time stats) that don't change the instance list itself.
+    /// </summary>
+    public void SaveInstanceMetadata(GameInstance instance)
+    {
+        lock (_lock) Json.WriteToFile(Paths.InstanceConfig(instance.Id), instance);
+    }
+
     /// <summary>Returns an instance by id.</summary>
     public GameInstance? GetInstance(string id)
     {

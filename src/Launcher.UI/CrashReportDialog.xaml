@@ -1,0 +1,71 @@
+<Window x:Class="Launcher.UI.CrashReportDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="FoxLauncher — Crash Report"
+        Width="600" Height="580" MinWidth="540" MinHeight="480"
+        WindowStartupLocation="CenterOwner" ResizeMode="CanResize"
+        ShowInTaskbar="False" WindowStyle="None" AllowsTransparency="False"
+        Background="{DynamicResource SurfaceBrush}"
+        MouseLeftButtonDown="OnTitleMouseDown">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Grid Grid.Row="0">
+            <StackPanel>
+                <TextBlock Text="Game Crashed" Style="{StaticResource H1Text}"/>
+                <TextBlock x:Name="SubtitleText" Style="{StaticResource SecondaryText}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+            </StackPanel>
+            <Button x:Name="CloseButton" Content="✕" Style="{StaticResource GhostButton}" HorizontalAlignment="Right"
+                    VerticalAlignment="Top" Padding="10,4" IsCancel="True" Click="OnCloseClick"/>
+        </Grid>
+
+        <!-- Diagnosis -->
+        <Border Grid.Row="1" Margin="0,16,0,0" CornerRadius="10"
+                Background="{DynamicResource AccentDarkBrush}" Padding="16,12">
+            <StackPanel>
+                <TextBlock x:Name="DiagnosisText" FontSize="15" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}" TextWrapping="Wrap"/>
+                <TextBlock x:Name="FixHintText" Style="{StaticResource SecondaryText}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Details -->
+        <Grid Grid.Row="2" Margin="0,16,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="SummaryText" Style="{StaticResource CaptionText}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,12,0"/>
+                <Button x:Name="OpenReportButton" Grid.Column="1" Content="Open report" Style="{StaticResource GhostButton}"
+                        Padding="10,4" VerticalAlignment="Center" Click="OnOpenReportClick"/>
+            </Grid>
+            <TextBox x:Name="StackText" Grid.Row="1" Style="{StaticResource InputTextBox}" Margin="0,8,0,0"
+                     IsReadOnly="True" TextWrapping="NoWrap" AcceptsReturn="True"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                     VerticalContentAlignment="Top" Padding="10,8" FontFamily="Consolas" FontSize="12"/>
+        </Grid>
+
+        <!-- Footer -->
+        <Grid Grid.Row="3" Margin="0,16,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="You can keep playing other instances after closing this report."
+                       Style="{StaticResource CaptionText}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+            <Button x:Name="DoneButton" Grid.Column="1" Content="Close" Style="{StaticResource GhostButton}"
+                    MinWidth="90" IsCancel="True" Click="OnCloseClick"/>
+        </Grid>
+    </Grid>
+</Window>
