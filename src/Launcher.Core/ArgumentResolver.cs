@@ -167,8 +167,21 @@ public static class ArgumentResolver
         Set("library_directory", Paths.Libraries);
         Set("classpath", classpath);
         Set("classpath_separator", Path.PathSeparator.ToString());
-        Set("resolution_width", options.Width.ToString());
-        Set("resolution_height", options.Height.ToString());
+
+        // When the game starts in fullscreen, use the monitor's native
+        // resolution so it actually fills the whole screen instead of
+        // honoring a small windowed width/height from the settings.
+        if (options.Fullscreen && OperatingSystem.IsWindows())
+        {
+            var (screenWidth, screenHeight) = DisplayMetrics.PrimaryScreenSize;
+            Set("resolution_width", screenWidth > 0 ? screenWidth.ToString() : options.Width.ToString());
+            Set("resolution_height", screenHeight > 0 ? screenHeight.ToString() : options.Height.ToString());
+        }
+        else
+        {
+            Set("resolution_width", options.Width.ToString());
+            Set("resolution_height", options.Height.ToString());
+        }
         Set("quickPlayPath", Path.Combine(gameDir, "quickPlay"));
         Set("quickPlaySingleplayer", "");
         Set("quickPlayMultiplayer", "");

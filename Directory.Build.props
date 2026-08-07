@@ -8,7 +8,7 @@
     <WarningsNotAsErrors>nullable</WarningsNotAsErrors>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591;NU1701</NoWarn>
-    <Version>1.1.8</Version>
+    <Version>1.1.9</Version>
     <Authors>FoxLauncher</Authors>
     <Product>FoxLauncher</Product>
     <Company>FoxLauncher</Company>
