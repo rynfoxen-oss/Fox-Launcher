@@ -73,18 +73,26 @@ public sealed class UpdateService
             File.Copy(downloadedExe, newExe, overwrite: true);
 
             var script = Path.Combine(scriptDir, "apply.ps1");
+            var logFile = Path.Combine(scriptDir, "apply.log");
+            // NOTE: never name a parameter $pid — PowerShell reserves $PID as a
+            // read-only automatic variable, which makes the whole script fail at
+            // binding (and silently aborts the update). $processId is safe.
             File.WriteAllText(script,
-                "param([string]$src, [string]$dst, [int]$pid)\r\n" +
+                "param([string]$src, [string]$dst, [int]$processId)\r\n" +
+                "function Log([string]$msg) { Add-Content -LiteralPath \"" + logFile + "\" -Value \"$msg\" }\r\n" +
+                "Log \"update script started\"\r\n" +
                 "$deadline = (Get-Date).AddMinutes(4)\r\n" +
                 "$copied = $false\r\n" +
                 "while ((Get-Date) -lt $deadline) {\r\n" +
-                "    $process = Get-Process -Id $pid -ErrorAction SilentlyContinue\r\n" +
-                "    if ($process -eq $null) {\r\n" +
+                "    $process = Get-Process -Id $processId -ErrorAction SilentlyContinue\r\n" +
+                "    if ($null -eq $process) {\r\n" +
                 "        try {\r\n" +
                 "            Copy-Item -LiteralPath $src -Destination $dst -Force -ErrorAction Stop\r\n" +
                 "            $copied = $true\r\n" +
+                "            Log \"copied $src -> $dst\"\r\n" +
                 "            break\r\n" +
                 "        } catch {\r\n" +
+                "            Log \"copy failed: $($_.Exception.Message)\"\r\n" +
                 "            Start-Sleep -Milliseconds 500\r\n" +
                 "        }\r\n" +
                 "    } else {\r\n" +
@@ -92,7 +100,10 @@ public sealed class UpdateService
                 "    }\r\n" +
                 "}\r\n" +
                 "if ($copied) {\r\n" +
+                "    Log \"relaunching $dst\"\r\n" +
                 "    Start-Process -FilePath $dst -WorkingDirectory (Split-Path -Parent $dst) -WindowStyle Hidden\r\n" +
+                "} else {\r\n" +
+                "    Log \"timed out, could not replace $dst\"\r\n" +
                 "}\r\n" +
                 "Start-Sleep -Seconds 1\r\n" +
                 "Remove-Item -LiteralPath $src -Force -ErrorAction SilentlyContinue\r\n" +

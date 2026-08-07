@@ -251,5 +251,5 @@ internal static class InstallerCore
 internal static class InstallerInfo
 {
     /// <summary>Launcher version shown in the uninstall registry entry.</summary>
-    public const string Version = "1.1.6";
+    public const string Version = "1.1.7";
 }
