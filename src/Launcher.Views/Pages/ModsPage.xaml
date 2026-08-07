@@ -313,9 +313,10 @@
                                      SelectionChanged="InstalledList_SelectionChanged"
                                      MaxHeight="520"
                                      ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                     ScrollViewer.CanContentScroll="True"
+                                     ScrollViewer.CanContentScroll="False"
                                      VirtualizingPanel.IsVirtualizing="True"
-                                     VirtualizingPanel.VirtualizationMode="Recycling" Grid.Row="2">
+                                     VirtualizingPanel.VirtualizationMode="Recycling" Grid.Row="2"
+                                     PreviewMouseWheel="SlowScroll_PreviewMouseWheel">
                                     <ListBox.Style>
                                         <Style TargetType="ListBox" BasedOn="{StaticResource PlainListBox}">
                                             <Setter Property="Visibility" Value="Visible"/>
@@ -444,9 +445,10 @@
                             <ListBox x:Name="BrowseList" ItemsSource="{Binding SearchResults}" SelectedItem="{Binding SelectedResult, Mode=TwoWay}"
                                      Grid.Row="2" MaxHeight="520"
                                      ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                     ScrollViewer.CanContentScroll="True"
+                                     ScrollViewer.CanContentScroll="False"
                                      VirtualizingPanel.IsVirtualizing="True"
-                                     VirtualizingPanel.VirtualizationMode="Recycling">
+                                     VirtualizingPanel.VirtualizationMode="Recycling"
+                                     PreviewMouseWheel="SlowScroll_PreviewMouseWheel">
                                     <ListBox.Style>
                                         <Style TargetType="ListBox" BasedOn="{StaticResource PlainListBox}">
                                             <Setter Property="Visibility" Value="Visible"/>
@@ -459,38 +461,38 @@
                                     </ListBox.Style>
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,10" Padding="12">
+                                        <Border Style="{StaticResource CardPanel}" Margin="0,0,0,8" Padding="10">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="56"/>
+                                                    <ColumnDefinition Width="46"/>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <Border Width="48" Height="48" CornerRadius="8" Background="{StaticResource SurfaceAltBrush}"
+                                                <Border Width="38" Height="38" CornerRadius="7" Background="{StaticResource SurfaceAltBrush}"
                                                         ClipToBounds="True" VerticalAlignment="Center">
                                                     <Image Source="{Binding IconUrl}" Stretch="UniformToFill"/>
                                                 </Border>
-                                                <StackPanel Grid.Column="1" Margin="12,0,12,0" VerticalAlignment="Center">
+                                                <StackPanel Grid.Column="1" Margin="10,0,10,0" VerticalAlignment="Center">
                                                     <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Text="{Binding Title}" Style="{StaticResource SectionTitleText}"
+                                                        <TextBlock Text="{Binding Title}" Style="{StaticResource SectionTitleText}" FontSize="14"
                                                                    TextTrimming="CharacterEllipsis" MaxWidth="380"/>
                                                         <Border Style="{StaticResource ModBadge}" Background="{StaticResource AccentDarkBrush}"
                                                                 Visibility="{Binding Installed, Converter={StaticResource BoolToVisibility}}">
-                                                            <TextBlock Text="Installed" FontSize="10" Foreground="{StaticResource TextPrimary}"/>
+                                                            <TextBlock Text="Installed" FontSize="9" Foreground="{StaticResource TextPrimary}"/>
                                                         </Border>
                                                     </StackPanel>
-                                                    <TextBlock Text="{Binding Description}" Style="{StaticResource MutedText}" Margin="0,4,0,0"
+                                                    <TextBlock Text="{Binding Description}" Style="{StaticResource MutedText}" FontSize="12" Margin="0,3,0,0"
                                                                TextTrimming="CharacterEllipsis" MaxWidth="520"/>
-                                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                                        <TextBlock Text="{Binding Author}" Style="{StaticResource CaptionText}"/>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                                        <TextBlock Text="{Binding Author}" Style="{StaticResource CaptionText}" FontSize="11"/>
                                                         <TextBlock Text="{Binding Downloads, Converter={StaticResource CompactNumber}, StringFormat='  {0} downloads'}"
-                                                                   Style="{StaticResource CaptionText}"/>
+                                                                   Style="{StaticResource CaptionText}" FontSize="11"/>
                                                         <TextBlock Text="{Binding Follows, Converter={StaticResource CompactNumber}, StringFormat='  {0} follows'}"
-                                                                   Style="{StaticResource CaptionText}" Visibility="{Binding Follows, Converter={StaticResource BoolToVisibility}}"/>
+                                                                   Style="{StaticResource CaptionText}" FontSize="11" Visibility="{Binding Follows, Converter={StaticResource BoolToVisibility}}"/>
                                                         <TextBlock Text="{Binding DateModified, Converter={StaticResource RelativeTime}, StringFormat='  Updated {0}'}"
-                                                                   Style="{StaticResource CaptionText}"/>
+                                                                   Style="{StaticResource CaptionText}" FontSize="11"/>
                                                     </StackPanel>
-                                                    <ItemsControl ItemsSource="{Binding Badges}" Margin="0,6,0,0">
+                                                    <ItemsControl ItemsSource="{Binding Badges}" Margin="0,4,0,0">
                                                         <ItemsControl.ItemsPanel>
                                                             <ItemsPanelTemplate>
                                                                 <WrapPanel/>
@@ -499,19 +501,19 @@
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate>
                                                                 <Border Style="{StaticResource ModBadge}" Background="{StaticResource SurfaceBrush}"
-                                                                        Margin="0,0,6,0" HorizontalAlignment="Left">
-                                                                    <TextBlock Text="{Binding}" FontSize="10" Foreground="{StaticResource TextSecondary}"/>
+                                                                        Margin="0,0,5,0" HorizontalAlignment="Left">
+                                                                    <TextBlock Text="{Binding}" FontSize="9" Foreground="{StaticResource TextSecondary}"/>
                                                                 </Border>
                                                             </DataTemplate>
                                                         </ItemsControl.ItemTemplate>
                                                     </ItemsControl>
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                                                    <Button Content="Details" Style="{StaticResource GhostButton}"
+                                                    <Button Content="Details" Style="{StaticResource GhostButton}" Padding="10,4"
                                                             HorizontalAlignment="Right"
                                                             Command="{Binding DataContext.SelectModCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                                             CommandParameter="{Binding}"/>
-                                                    <Button Content="Install" Style="{StaticResource PrimaryButton}" Margin="0,8,0,0"
+                                                    <Button Content="Install" Style="{StaticResource PrimaryButton}" Padding="12,4" Margin="0,6,0,0"
                                                             HorizontalAlignment="Right"
                                                             Command="{Binding DataContext.InstallSelectedCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                                             CommandParameter="{Binding}"

@@ -41,7 +41,8 @@
             </ListBox>
 
             <!-- ===== Section content ===== -->
-            <ScrollViewer Grid.Column="1" Padding="0,20,0,0" VerticalScrollBarVisibility="Auto">
+            <ScrollViewer x:Name="ContentScroller" Grid.Column="1" Padding="0,20,0,0"
+                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel MaxWidth="760" HorizontalAlignment="Left">
 
                     <!-- ============ Game & Java ============ -->

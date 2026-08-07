@@ -5,7 +5,6 @@ public sealed class GameProcess
 {
     private readonly global::System.Diagnostics.Process _process;
     private readonly StreamWriter? _logWriter;
-
     public GameProcess(global::System.Diagnostics.Process process, StreamWriter? logWriter, string gameVersion, string instanceName)
     {
         _process = process;
@@ -46,16 +45,24 @@ public sealed class GameProcess
     /// <summary>Starts asynchronously reading the process output.</summary>
     public void BeginReading()
     {
+        // Capture the caller's synchronization context (the UI thread when launched
+        // from the UI) so exit/state events are delivered on the UI thread instead of
+        // a thread-pool thread. Subscribers of Exited mutate bound commands and
+        // view-model state, which must happen on the owning thread.
+        var uiContext = global::System.Threading.SynchronizationContext.Current;
+
         _process.OutputDataReceived += (_, e) =>
         {
             if (e.Data is null) return;
-            _logWriter?.WriteLine(e.Data);
+            try { _logWriter?.WriteLine(e.Data); }
+            catch { /* log stream may already be closed */ }
             OutputReceived?.Invoke(e.Data);
         };
         _process.ErrorDataReceived += (_, e) =>
         {
             if (e.Data is null) return;
-            _logWriter?.WriteLine(e.Data);
+            try { _logWriter?.WriteLine(e.Data); }
+            catch { /* log stream may already be closed */ }
             OutputReceived?.Invoke(e.Data);
         };
         _process.BeginOutputReadLine();
@@ -63,10 +70,24 @@ public sealed class GameProcess
 
         Task.Run(() =>
         {
-            _process.WaitForExit();
-            _logWriter?.Flush();
-            _logWriter?.Dispose();
-            Exited?.Invoke(ExitCode);
+            try
+            {
+                _process.WaitForExit();
+                _logWriter?.Flush();
+                _logWriter?.Dispose();
+            }
+            catch { /* process already gone or stream closed */ }
+
+            var exitCode = ExitCode;
+            if (uiContext is not null)
+            {
+                try { uiContext.Post(_ => Exited?.Invoke(exitCode), null); }
+                catch { Exited?.Invoke(exitCode); }
+            }
+            else
+            {
+                Exited?.Invoke(exitCode);
+            }
         });
     }
 

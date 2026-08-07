@@ -50,10 +50,12 @@ public static class ArgumentResolver
             args.Add("-XX:+OptimizeStringConcat");
         }
 
-        // Low-latency G1 tuning used by popular third-party launchers. These
-        // flags are safe across Java 8-21 and only apply to the G1 collector.
+        // Low-latency G1 tuning used by popular third-party launchers. Oracle
+        // JDK builds treat G1NewSizePercent/G1MaxNewSizePercent as experimental,
+        // so the unlock flag must come first or the JVM refuses to start.
         if (options.BoostFps)
         {
+            args.Add("-XX:+UnlockExperimentalVMOptions");
             args.Add("-XX:G1NewSizePercent=30");
             args.Add("-XX:G1MaxNewSizePercent=40");
             args.Add("-XX:G1HeapRegionSize=8M");

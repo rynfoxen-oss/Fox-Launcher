@@ -16,7 +16,20 @@ public partial class LogsPage : UserControl
 
     private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(LogsViewModel.Lines) && LogList.Items.Count > 0)
+        if (e.PropertyName != nameof(LogsViewModel.Lines)) return;
+        if (Dispatcher.CheckAccess())
+        {
+            ScrollToBottom();
+        }
+        else
+        {
+            Dispatcher.BeginInvoke(ScrollToBottom);
+        }
+    }
+
+    private void ScrollToBottom()
+    {
+        if (LogList.Items.Count > 0)
         {
             LogList.ScrollIntoView(LogList.Items[LogList.Items.Count - 1]);
         }

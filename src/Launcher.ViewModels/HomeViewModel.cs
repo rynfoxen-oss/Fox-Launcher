@@ -32,7 +32,14 @@ public sealed class HomeViewModel : ViewModelBase
             if (p is GameInstance instance && Main is not null)
             {
                 Main.SelectedInstance = instance;
-                _ = PlayAsync();
+                _ = PlayAsync().ContinueWith(t =>
+                {
+                    if (t.IsFaulted)
+                    {
+                        try { Services.Log.Error("Failed to launch instance", t.Exception); }
+                        catch { /* never fail on logging */ }
+                    }
+                }, TaskContinuationOptions.OnlyOnFaulted);
             }
         }, _ => CanLaunch);
 

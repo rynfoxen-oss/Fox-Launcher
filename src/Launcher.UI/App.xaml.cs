@@ -45,11 +45,16 @@ public partial class App : Application
         };
         TaskScheduler.UnobservedTaskException += (_, args) =>
         {
-            File.AppendAllText(Path.Combine(Paths.Logs, "crash.log"),
-                $"===== UNOBSERVED TASK EXCEPTION at {DateTime.Now:yyyy-MM-dd HH:mm:ss} =====\n" +
-                $"{args.Exception.GetType().Name}: {args.Exception.Message}\n" +
-                $"Stack Trace:\n{args.Exception.StackTrace}\n\n");
-            MessageBox.Show($"Unobserved task exception: {args.Exception.Message}\n\n{args.Exception.StackTrace}", "FoxLauncher Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            try
+            {
+                var flattened = args.Exception.Flatten();
+                var detail = flattened.InnerExceptions.Count > 0
+                    ? string.Join("\n\n", flattened.InnerExceptions.Select(i => i.ToString()))
+                    : args.Exception.ToString();
+                File.AppendAllText(Path.Combine(Paths.Logs, "crash.log"),
+                    $"===== UNOBSERVED TASK EXCEPTION at {DateTime.Now:yyyy-MM-dd HH:mm:ss} =====\n{detail}\n\n");
+            }
+            catch { /* never fail on logging */ }
             args.SetObserved();
         };
 

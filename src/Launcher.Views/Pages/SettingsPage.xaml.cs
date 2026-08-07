@@ -20,5 +20,6 @@ public partial class SettingsPage : UserControl
         AppearanceSection.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
         GeneralSection.Visibility = index == 3 ? Visibility.Visible : Visibility.Collapsed;
         AboutSection.Visibility = index == 4 ? Visibility.Visible : Visibility.Collapsed;
+        ContentScroller?.ScrollToTop();
     }
 }
