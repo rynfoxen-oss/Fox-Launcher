@@ -133,6 +133,36 @@ public sealed class SettingsService : ObservableObject
 
     public string MicrosoftClientId => _settings.MicrosoftClientId;
 
+    public bool DisableAnimations
+    {
+        get => _settings.DisableAnimations;
+        set { _settings.DisableAnimations = value; OnPropertyChanged(); Save(); }
+    }
+
+    public string? JvmArguments
+    {
+        get => _settings.JvmArguments;
+        set { _settings.JvmArguments = value; OnPropertyChanged(); Save(); }
+    }
+
+    public int GcPauseMillis
+    {
+        get => _settings.GcPauseMillis;
+        set { _settings.GcPauseMillis = Math.Clamp(value, 10, 300); OnPropertyChanged(); Save(); }
+    }
+
+    public bool AlwaysPreTouch
+    {
+        get => _settings.AlwaysPreTouch;
+        set { _settings.AlwaysPreTouch = value; OnPropertyChanged(); Save(); }
+    }
+
+    public bool MultiCoreOptimization
+    {
+        get => _settings.MultiCoreOptimization;
+        set { _settings.MultiCoreOptimization = value; OnPropertyChanged(); Save(); }
+    }
+
     public List<ServerEntry> Servers => _settings.Servers;
 
     public List<string> RecentInstances => _settings.RecentInstances;

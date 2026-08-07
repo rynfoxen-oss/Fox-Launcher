@@ -244,9 +244,8 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Main content area -->
-            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
-            <Grid>
+            <!-- Main content area (each list below has its own internal scroller) -->
+            <Grid Grid.Column="0">
                 <!-- No-instances empty state -->
                 <Border Style="{StaticResource CardPanel}" Padding="24" MaxWidth="520" HorizontalAlignment="Center"
                         VerticalAlignment="Center" Visibility="{Binding NoInstances, Converter={StaticResource BoolToVisibility}}">
@@ -469,7 +468,6 @@
                         </Grid>
                 </Grid>
             </Grid>
-            </ScrollViewer>
 
             <!-- ===== Detail drawer (right side) ===== -->
             <Border Grid.Column="1" Width="360" Margin="12,0,0,0"

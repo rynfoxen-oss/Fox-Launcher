@@ -84,6 +84,7 @@ public sealed class SettingsViewModel : ViewModelBase
     public IReadOnlyList<SettingsSection> Sections { get; } = new[]
     {
         new SettingsSection("Game & Java", "\uE7FC"),
+        new SettingsSection("Performance", "\uE945"),
         new SettingsSection("Appearance", "\uE790"),
         new SettingsSection("General", "\uE713"),
         new SettingsSection("About", "\uE946"),

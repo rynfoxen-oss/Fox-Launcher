@@ -38,4 +38,16 @@ public sealed class LaunchOptions
 
     /// <summary>Set when a specific java major version must be used.</summary>
     public int? RequiredJavaMajor { get; set; }
+
+    /// <summary>Garbage collector max pause target in milliseconds.</summary>
+    public int GcPauseMillis { get; set; } = 50;
+
+    /// <summary>Touch all JVM memory pages on startup.</summary>
+    public bool AlwaysPreTouch { get; set; } = true;
+
+    /// <summary>Add JVM flags that reduce GC hitches on multicore CPUs.</summary>
+    public bool MultiCoreOptimization { get; set; } = true;
+
+    /// <summary>Extra free-form JVM arguments appended to the command line.</summary>
+    public string? JvmArguments { get; set; }
 }

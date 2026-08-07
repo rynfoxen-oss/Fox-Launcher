@@ -34,9 +34,27 @@ public static class ArgumentResolver
         args.Add("-Xms" + options.MinMemoryMb + "M");
         args.Add("-XX:+UseG1GC");
         args.Add("-XX:+ParallelRefProcEnabled");
-        args.Add("-XX:MaxGCPauseMillis=50");
-        args.Add("-XX:+AlwaysPreTouch");
+        args.Add("-XX:MaxGCPauseMillis=" + Math.Clamp(options.GcPauseMillis, 10, 300));
+        if (options.AlwaysPreTouch)
+        {
+            args.Add("-XX:+AlwaysPreTouch");
+        }
         args.Add("-XX:+DisableExplicitGC");
+
+        if (options.MultiCoreOptimization)
+        {
+            args.Add("-XX:+UseStringDeduplication");
+            args.Add("-XX:+OptimizeStringConcat");
+        }
+
+        // User-supplied extra flags (split on spaces, respecting quotes).
+        if (!string.IsNullOrWhiteSpace(options.JvmArguments))
+        {
+            foreach (var token in SplitLegacyArguments(options.JvmArguments))
+            {
+                args.Add(token);
+            }
+        }
 
         if (options.ShowFps)
         {

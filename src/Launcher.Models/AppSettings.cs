@@ -66,6 +66,21 @@ public sealed class AppSettings
     /// <summary>Whether a desktop shortcut should be created on install.</summary>
     public bool CreateDesktopShortcut { get; set; } = true;
 
+    /// <summary>Disable launcher UI effects (shadows, animations) for smoother UI on low-end machines.</summary>
+    public bool DisableAnimations { get; set; }
+
+    /// <summary>Extra JVM flags appended to the game launch command.</summary>
+    public string? JvmArguments { get; set; }
+
+    /// <summary>Garbage collector max pause target in milliseconds.</summary>
+    public int GcPauseMillis { get; set; } = 50;
+
+    /// <summary>Touch all JVM memory pages on startup (smoother in-game, slower to start).</summary>
+    public bool AlwaysPreTouch { get; set; } = true;
+
+    /// <summary>Add JVM flags that reduce garbage-collection hitches on multicore CPUs.</summary>
+    public bool MultiCoreOptimization { get; set; } = true;
+
     /// <summary>Microsoft OAuth application (client) id.</summary>
     public string MicrosoftClientId { get; set; } = "replace-with-your-azure-client-id";
 

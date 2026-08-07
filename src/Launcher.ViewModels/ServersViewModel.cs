@@ -204,7 +204,11 @@ public sealed class ServersViewModel : ViewModelBase
             MinMemoryMb = Services.Settings.MinMemoryMb,
             JavaPath = Services.Settings.JavaPath,
             ServerIp = server.Ip,
-            ServerPort = server.Port
+            ServerPort = server.Port,
+            GcPauseMillis = Services.Settings.GcPauseMillis,
+            AlwaysPreTouch = Services.Settings.AlwaysPreTouch,
+            MultiCoreOptimization = Services.Settings.MultiCoreOptimization,
+            JvmArguments = Services.Settings.JvmArguments
         };
 
         // Ensure the version is installed.

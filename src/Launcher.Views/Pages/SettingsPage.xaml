@@ -128,6 +128,59 @@
                         </StackPanel>
                     </Grid>
 
+                    <!-- ============ Performance ============ -->
+                    <Grid x:Name="PerformanceSection" Visibility="Collapsed">
+                        <StackPanel>
+                            <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <TextBlock Text="Launcher performance" Style="{StaticResource H2Text}"/>
+                                    <TextBlock Text="Reduce the visual work the launcher UI does on screen." Style="{StaticResource MutedText}"/>
+
+                                    <CheckBox Content="Reduce UI effects" Style="{StaticResource ToggleSwitch}" Margin="0,18,0,0"
+                                              IsChecked="{Binding Settings.DisableAnimations, Mode=TwoWay}"/>
+                                    <TextBlock Text="Removes card shadows and animations. Smoother on low-end machines, flatter look."
+                                               Style="{StaticResource MutedText}" Margin="56,2,0,0"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource CardPanel}">
+                                <StackPanel>
+                                    <TextBlock Text="Game performance" Style="{StaticResource H2Text}"/>
+                                    <TextBlock Text="JVM tuning that reduces hitches while you play." Style="{StaticResource MutedText}"/>
+
+                                    <Grid Margin="0,18,0,0">
+                                        <TextBlock Text="Max GC pause (ms)" Style="{StaticResource CaptionText}"/>
+                                        <TextBlock Text="{Binding Settings.GcPauseMillis, StringFormat={}{0} ms}"
+                                                   Style="{StaticResource MutedText}" HorizontalAlignment="Right"/>
+                                    </Grid>
+                                    <Slider Minimum="10" Maximum="300" TickFrequency="10" IsSnapToTickEnabled="True"
+                                            Value="{Binding Settings.GcPauseMillis, Mode=TwoWay}" Style="{StaticResource AccentSlider}"/>
+                                    <TextBlock Text="Lower values keep the game frame rate steadier, higher values reduce CPU overhead."
+                                               Style="{StaticResource MutedText}"/>
+
+                                    <StackPanel Margin="0,18,0,0">
+                                        <CheckBox Content="Pre-touch memory at startup" Style="{StaticResource ToggleSwitch}"
+                                                  IsChecked="{Binding Settings.AlwaysPreTouch, Mode=TwoWay}"/>
+                                        <TextBlock Text="Allocates memory up front. Slower to start, smoother during play."
+                                                   Style="{StaticResource MutedText}" Margin="56,2,0,0"/>
+
+                                        <CheckBox Content="Multicore optimizations" Style="{StaticResource ToggleSwitch}" Margin="0,14,0,0"
+                                                  IsChecked="{Binding Settings.MultiCoreOptimization, Mode=TwoWay}"/>
+                                        <TextBlock Text="Adds flags that reduce garbage-collection hitches on multicore CPUs."
+                                                   Style="{StaticResource MutedText}" Margin="56,2,0,0"/>
+                                    </StackPanel>
+
+                                    <TextBlock Text="Extra JVM arguments" Style="{StaticResource CaptionText}" Margin="0,18,0,6"/>
+                                    <TextBox Text="{Binding Settings.JvmArguments, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource InputTextBox}" Height="42" VerticalContentAlignment="Center"
+                                             ToolTip="Example: -Dlog4j2.formatMsgNoLookups=true -XX:+UseAESIntrinsics"/>
+                                    <TextBlock Text="Appended to the Java command line, separated by spaces. For advanced users."
+                                               Style="{StaticResource MutedText}" Margin="0,8,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+
                     <!-- ============ Appearance ============ -->
                     <Grid x:Name="AppearanceSection" Visibility="Collapsed">
                         <StackPanel>

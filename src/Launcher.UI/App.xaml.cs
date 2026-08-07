@@ -309,6 +309,7 @@ public partial class App : Application
     private readonly object _themeLock = new();
     private string? _appliedTheme;
     private string? _appliedAccent;
+    private bool _appliedFx;
 
     /// <summary>Applies the current theme + accent from settings to app resources.</summary>
     internal void ApplyTheme()
@@ -316,12 +317,14 @@ public partial class App : Application
         var settings = AppHost.Services!.Settings;
         var theme = settings.Theme;
         var accent = settings.AccentColor;
+        var noFx = settings.DisableAnimations;
 
         lock (_themeLock)
         {
-            if (_appliedTheme == theme && _appliedAccent == accent) return;
+            if (_appliedTheme == theme && _appliedAccent == accent && _appliedFx == noFx) return;
             _appliedTheme = theme;
             _appliedAccent = accent;
+            _appliedFx = noFx;
 
             var themeDict = new ResourceDictionary
             {
@@ -349,6 +352,16 @@ public partial class App : Application
                 accentDict["AccentLightBrush"] = new SolidColorBrush(Mix(color, Colors.White, 0.35f));
                 accentDict["AccentDarkBrush"] = new SolidColorBrush(Mix(color, Colors.Black, 0.45f));
                 accentDict["AccentGlowBrush"] = new SolidColorBrush(Color.FromArgb(0x66, color.R, color.G, color.B));
+            }
+
+            // "Reduce UI effects": replace the card shadow with a flat, invisible one.
+            if (noFx)
+            {
+                accentDict["CardShadow"] = new System.Windows.Media.Effects.DropShadowEffect { Opacity = 0 };
+            }
+            else
+            {
+                accentDict.Remove("CardShadow");
             }
         }
     }

@@ -171,7 +171,11 @@ public sealed class HomeViewModel : ViewModelBase
             MinMemoryMb = Services.Settings.MinMemoryMb,
             JavaPath = Services.Settings.JavaPath,
             ShowFps = Services.Settings.ShowFps,
-            CloseAfterLaunch = Services.Settings.CloseAfterLaunch
+            CloseAfterLaunch = Services.Settings.CloseAfterLaunch,
+            GcPauseMillis = Services.Settings.GcPauseMillis,
+            AlwaysPreTouch = Services.Settings.AlwaysPreTouch,
+            MultiCoreOptimization = Services.Settings.MultiCoreOptimization,
+            JvmArguments = Services.Settings.JvmArguments
         };
 
         Main!.Status = "Launching...";
