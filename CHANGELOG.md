@@ -6,7 +6,7 @@ and uses [Semantic Versioning](https://semver.org/).
 
 ## [1.1.5] - 2026-08-06
 ### Added
-- Added a "Boost FPS" option in Settings &gt; Performance. When enabled the launcher applies low-latency G1 JVM flags, fills in FPS-friendly in-game graphics defaults (render distance, particles, clouds, vsync, biome blend, mipmaps) without overwriting existing choices, and auto-installs performance mods per instance (Sodium/Lithium/EntityCulling on Fabric and Quilt, Embeddium/FerriteCore/EntityCulling on Forge and NeoForge). Incompatible mods are skipped automatically.
+- Added a "Boost FPS" option in Settings &gt; Performance. When enabled the launcher applies low-latency G1 JVM flags, fills in FPS-friendly in-game graphics defaults (render distance, particles, clouds, vsync, biome blend, mipmaps) without overwriting existing choices, and auto-installs performance mods per instance (Sodium, Lithium, Krypton, ModernFix, FerriteCore, Noisium, ImmediatelyFast and EntityCulling on Fabric/Quilt; Embeddium, Canary, ModernFix, FerriteCore, Noisium, ImmediatelyFast and EntityCulling on Forge/NeoForge). Incompatible mods are skipped automatically.
 - Added a graphical setup wizard (`Launcher.Installer.exe`) with standard and portable install modes, an install progress view, and a one-click launch step.
 - Redesigned the Settings page with a left-hand navigation (Game, Appearance, General, About) and grouped option cards.
 - Added language selection (English, Vietnamese, French, German, Spanish, Russian, Chinese, Japanese).

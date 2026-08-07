@@ -452,10 +452,29 @@ public sealed class GameLauncherService
     }
 
     /// <summary>Fabric/Quilt mods that give the biggest FPS win for modded play.</summary>
-    private static readonly string[] FabricPerfMods = { "sodium", "lithium", "entityculling" };
+    private static readonly string[] FabricPerfMods =
+    {
+        "sodium",          // fast renderer
+        "lithium",         // server/game logic speedup
+        "entityculling",   // skip rendering hidden entities
+        "ferrite-core",    // lower memory, fewer GC hitches
+        "modernfix",       // bundled startup + runtime perf fixes
+        "noisium",         // faster chunk generation
+        "immediatelyfast", // faster model rendering and instant tooltips
+        "krypton"          // networking optimization (less server lag)
+    };
 
     /// <summary>Forge/NeoForge equivalents (Embeddium is the Sodium port).</summary>
-    private static readonly string[] ForgePerfMods = { "embeddium", "ferritecore", "entityculling" };
+    private static readonly string[] ForgePerfMods =
+    {
+        "embeddium",       // fast renderer (Sodium port)
+        "ferrite-core",    // lower memory, fewer GC hitches
+        "entityculling",   // skip rendering hidden entities
+        "modernfix",       // bundled startup + runtime perf fixes
+        "noisium",         // faster chunk generation
+        "immediatelyfast", // faster model rendering and instant tooltips
+        "canary"           // server/game logic speedup (Lithium port)
+    };
 
     /// <summary>
     /// Installs performance mods (with automatic dependencies) into modded

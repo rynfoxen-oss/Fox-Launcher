@@ -171,7 +171,7 @@
 
                                         <CheckBox Content="Boost FPS" Style="{StaticResource ToggleSwitch}" Margin="0,14,0,0"
                                                   IsChecked="{Binding Settings.BoostFps, Mode=TwoWay}"/>
-                                        <TextBlock Text="Tuned JVM flags, optimized in-game graphics defaults, and automatic performance mods (Sodium on Fabric, Embeddium on Forge). Incompatible mods are skipped."
+                                        <TextBlock Text="Tuned JVM flags, optimized in-game graphics defaults, and automatic performance mods (Sodium, Lithium, Krypton, ModernFix, ... on Fabric; Embeddium, Canary, ModernFix, ... on Forge). Incompatible mods are skipped."
                                                    Style="{StaticResource MutedText}" Margin="56,2,0,0" TextWrapping="Wrap"/>
                                     </StackPanel>
 
