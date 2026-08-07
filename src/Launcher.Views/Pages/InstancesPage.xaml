@@ -67,7 +67,7 @@
                             </StackPanel>
                             <StackPanel Grid.Column="2">
                                 <TextBlock Text="Mod loader" Style="{StaticResource CaptionText}" Margin="0,0,0,6"/>
-                                <ComboBox ItemsSource="{Binding LoaderTypes}" SelectedItem="{Binding NewLoader, Mode=TwoWay}"
+                                <ComboBox ItemsSource="{Binding AvailableLoaders}" SelectedItem="{Binding NewLoader, Mode=TwoWay}"
                                           Style="{StaticResource InputComboBox}"/>
                                 <TextBlock Text="Vanilla = no mods will load in-game. Choose Fabric or Forge to use mods."
                                            Style="{StaticResource MutedText}" FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap"/>

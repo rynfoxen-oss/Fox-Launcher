@@ -15,8 +15,8 @@
     <ApplicationIcon>..\..\assets\icons\fox.ico</ApplicationIcon>
     <AssemblyTitle>FoxLauncher Installer</AssemblyTitle>
     <Product>FoxLauncher</Product>
-    <Version>1.1.9</Version>
-    <Description>FoxLauncher 1.1.9 installer with a graphical setup wizard.</Description>
+    <Version>1.1.10</Version>
+    <Description>FoxLauncher 1.1.10 installer with a graphical setup wizard.</Description>
   </PropertyGroup>
 
   <!-- The single-file published launcher is embedded as a resource by build.ps1 -->

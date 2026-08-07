@@ -33,9 +33,13 @@ public sealed class ModLoaderInstallService
         _log = log;
     }
 
-    /// <summary>Returns available loader versions for a game version.</summary>
+    /// <summary>Returns available loader versions for a game version. Empty when
+    /// the loader has no builds for that version (e.g. Forge on 1.0).</summary>
     public async Task<List<string>> GetLoaderVersionsAsync(ModLoaderType loader, string gameVersion, CancellationToken ct = default)
     {
+        if (loader != ModLoaderType.Vanilla && !await SupportsAsync(loader, gameVersion, ct))
+            return new List<string>();
+
         return loader switch
         {
             ModLoaderType.Fabric => await _fabric.GetLoaderVersionsAsync(ct),
@@ -43,6 +47,40 @@ public sealed class ModLoaderInstallService
             ModLoaderType.Forge => await _forgeInstaller.ForgeApi.GetBuildsAsync(gameVersion, ct),
             ModLoaderType.NeoForge => await _forgeInstaller.NeoForgeApi.GetVersionsAsync(gameVersion, ct),
             _ => new List<string>()
+        };
+    }
+
+    /// <summary>Returns the loaders (excluding Vanilla) that have builds for the
+    /// given game version, so the create-instance wizard only offers valid loaders.</summary>
+    public async Task<List<ModLoaderType>> GetSupportedLoadersAsync(string gameVersion, CancellationToken ct = default)
+    {
+        var loaders = new[] { ModLoaderType.Forge, ModLoaderType.NeoForge, ModLoaderType.Fabric, ModLoaderType.Quilt };
+        var checks = loaders.Select(async loader =>
+        {
+            try
+            {
+                return (Loader: loader, Supported: await SupportsAsync(loader, gameVersion, ct));
+            }
+            catch (Exception ex)
+            {
+                _log.Warn($"Failed to check {loader} support for Minecraft {gameVersion}: {ex.Message}");
+                return (Loader: loader, Supported: false);
+            }
+        });
+
+        var results = await Task.WhenAll(checks);
+        return results.Where(r => r.Supported).Select(r => r.Loader).ToList();
+    }
+
+    private async Task<bool> SupportsAsync(ModLoaderType loader, string gameVersion, CancellationToken ct = default)
+    {
+        return loader switch
+        {
+            ModLoaderType.Fabric => (await _fabric.GetGameVersionsAsync(ct)).Contains(gameVersion, StringComparer.Ordinal),
+            ModLoaderType.Quilt => (await _quilt.GetGameVersionsAsync(ct)).Contains(gameVersion, StringComparer.Ordinal),
+            ModLoaderType.Forge => (await _forgeInstaller.ForgeApi.GetSupportedGameVersionsAsync(ct)).Contains(gameVersion),
+            ModLoaderType.NeoForge => (await _forgeInstaller.NeoForgeApi.GetSupportedGameVersionsAsync(ct)).Contains(gameVersion),
+            _ => false
         };
     }
 
@@ -57,6 +95,9 @@ public sealed class ModLoaderInstallService
         IProgress<InstallProgress>? progress = null,
         CancellationToken ct = default)
     {
+        if (loader != ModLoaderType.Vanilla && !await SupportsAsync(loader, gameVersion, ct))
+            throw new InvalidOperationException($"{loader} is not available for Minecraft {gameVersion}.");
+
         switch (loader)
         {
             case ModLoaderType.Fabric:

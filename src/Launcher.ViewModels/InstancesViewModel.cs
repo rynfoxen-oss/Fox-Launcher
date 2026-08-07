@@ -24,6 +24,7 @@ public sealed class InstancesViewModel : ViewModelBase
     private string? _newLoaderVersion;
     private IReadOnlyList<string> _loaderVersions = Array.Empty<string>();
     private IReadOnlyList<string> _gameVersions = AppInfo.SupportedVersions;
+    private IReadOnlyList<ModLoaderType> _availableLoaders = new[] { ModLoaderType.Vanilla };
     private string _status = "";
     private string? _activeId;
     private readonly LogService _log;
@@ -57,6 +58,7 @@ public sealed class InstancesViewModel : ViewModelBase
         services.Events.Subscribe<GameExitedEvent>(_ => PlayCommand.RaiseCanExecuteChanged());
 
         _ = LoadGameVersionsAsync();
+        _ = LoadAvailableLoadersAsync();
     }
 
     public RelayCommand CreateCommand { get; }
@@ -155,7 +157,7 @@ public sealed class InstancesViewModel : ViewModelBase
         get => _newGameVersion;
         set
         {
-            if (SetProperty(ref _newGameVersion, value)) _ = LoadLoaderVersionsAsync();
+            if (SetProperty(ref _newGameVersion, value)) _ = LoadAvailableLoadersAsync();
         }
     }
 
@@ -199,8 +201,55 @@ public sealed class InstancesViewModel : ViewModelBase
         private set => SetProperty(ref _gameVersions, value);
     }
 
-    public IReadOnlyList<ModLoaderType> LoaderTypes { get; } =
-        new[] { ModLoaderType.Vanilla, ModLoaderType.Forge, ModLoaderType.NeoForge, ModLoaderType.Fabric, ModLoaderType.Quilt };
+    public IReadOnlyList<ModLoaderType> AvailableLoaders
+    {
+        get => _availableLoaders;
+        private set => SetProperty(ref _availableLoaders, value);
+    }
+
+    /// <summary>Loaders that can be installed for the selected game version. The
+    /// wizard only offers these so a version like 1.0 (which supports no loader)
+    /// is limited to Vanilla.</summary>
+    private async Task LoadAvailableLoadersAsync()
+    {
+        var gameVersion = NewGameVersion;
+        if (string.IsNullOrWhiteSpace(gameVersion)) return;
+
+        IReadOnlyList<ModLoaderType> available;
+        try
+        {
+            var supported = await Services.LoaderInstall.GetSupportedLoadersAsync(gameVersion);
+            var list = new List<ModLoaderType> { ModLoaderType.Vanilla };
+            list.AddRange(supported);
+            available = list;
+            if (supported.Count == 0)
+            {
+                Status = $"No mod loaders are available for Minecraft {gameVersion}.";
+            }
+            else if (Status.StartsWith("No mod loaders are available for", StringComparison.Ordinal))
+            {
+                Status = "";
+            }
+        }
+        catch (Exception ex)
+        {
+            Services.Log.Warn($"Failed to load available loaders for Minecraft {gameVersion}: {ex.Message}");
+            available = new[] { ModLoaderType.Vanilla };
+        }
+
+        if (gameVersion != NewGameVersion) return;
+
+        AvailableLoaders = available;
+        if (!available.Contains(NewLoader))
+        {
+            NewLoader = ModLoaderType.Vanilla;
+        }
+        else
+        {
+            OnPropertyChanged(nameof(HasLoaderVersionPicker));
+            await LoadLoaderVersionsAsync();
+        }
+    }
 
     /// <summary>Fetches the official Minecraft version list from the Mojang manifest,
     /// keeping the curated quick-list pinned on top and falling back to it offline.</summary>

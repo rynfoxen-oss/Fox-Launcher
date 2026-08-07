@@ -10,8 +10,8 @@
     <StartupObject>Launcher.UI.Program</StartupObject>
     <AssemblyTitle>FoxLauncher</AssemblyTitle>
     <Product>FoxLauncher</Product>
-    <Description>FoxLauncher 1.1.9 — modern Minecraft launcher for Windows with redesigned settings and a graphical installer.</Description>
-    <Version>1.1.9</Version>
+    <Description>FoxLauncher 1.1.10 ï¿½ modern Minecraft launcher for Windows with redesigned settings and a graphical installer.</Description>
+    <Version>1.1.10</Version>
   </PropertyGroup>
 
   <ItemGroup>
