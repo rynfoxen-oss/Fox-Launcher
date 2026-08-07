@@ -5,6 +5,8 @@
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File build.ps1
+#   powershell -ExecutionPolicy Bypass -File build.ps1 -LauncherOnly   # publish + sign the launcher only
+#   powershell -ExecutionPolicy Bypass -File build.ps1 -InstallerOnly  # publish + sign the installer only
 #   powershell -ExecutionPolicy Bypass -File build.ps1 -CertificateThumbprint <sha1-thumbprint>
 #
 # Publish options used here (IncludeAllContentForSelfExtract, no single-file
@@ -12,11 +14,14 @@
 # Defender / SmartScreen heuristics. Real protection comes from code-signing:
 # pass -CertificateThumbprint (or set FOXLAUNCHER_CERT_THUMBPRINT) and the
 # launcher is signed before the installer embeds it, so the embedded copy is
-# signed too.
+# signed too. CI signing (e.g. SignPath.io) is handled by the workflow, which
+# calls -LauncherOnly, signs the launcher, then -InstallerOnly.
 
 [CmdletBinding()]
 param(
-    [string]$CertificateThumbprint = $env:FOXLAUNCHER_CERT_THUMBPRINT
+    [string]$CertificateThumbprint = $env:FOXLAUNCHER_CERT_THUMBPRINT,
+    [switch]$LauncherOnly,
+    [switch]$InstallerOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -38,36 +43,40 @@ function Invoke-SignIfConfigured {
     Invoke-SignFile -Path $File -SignTool $signtool -Thumbprint $CertificateThumbprint
 }
 
-Write-Host "Publishing FoxLauncher (self-contained, single-file)..." -ForegroundColor Cyan
-dotnet publish (Join-Path $root "src\Launcher.UI\Launcher.UI.csproj") `
-    -c Release -r win-x64 --self-contained true `
-    -p:PublishSingleFile=true -p:IncludeAllContentForSelfExtract=true `
-    -p:EnableCompressionInSingleFile=false `
-    -o $publishDir
+if (-not $InstallerOnly) {
+    Write-Host "Publishing FoxLauncher (self-contained, single-file)..." -ForegroundColor Cyan
+    dotnet publish (Join-Path $root "src\Launcher.UI\Launcher.UI.csproj") `
+        -c Release -r win-x64 --self-contained true `
+        -p:PublishSingleFile=true -p:IncludeAllContentForSelfExtract=true `
+        -p:EnableCompressionInSingleFile=false `
+        -o $publishDir
 
-$exe = Join-Path $publishDir "FoxLauncher.exe"
-if (-not (Test-Path $exe)) {
-    throw "Publish did not produce $exe"
+    $exe = Join-Path $publishDir "FoxLauncher.exe"
+    if (-not (Test-Path $exe)) {
+        throw "Publish did not produce $exe"
+    }
+
+    # Sign the launcher before building the installer so the embedded copy is signed.
+    Invoke-SignIfConfigured -File $exe
 }
 
-# Sign the launcher before building the installer so the embedded copy is signed.
-Invoke-SignIfConfigured -File $exe
+if (-not $LauncherOnly) {
+    Write-Host "Building installer..." -ForegroundColor Cyan
+    dotnet publish (Join-Path $root "src\Launcher.Installer\Launcher.Installer.csproj") `
+        -c Release -r win-x64 --self-contained true `
+        -p:PublishSingleFile=true -p:IncludeAllContentForSelfExtract=true `
+        -p:EnableCompressionInSingleFile=false `
+        -o $installerDir
 
-Write-Host "Building installer..." -ForegroundColor Cyan
-dotnet publish (Join-Path $root "src\Launcher.Installer\Launcher.Installer.csproj") `
-    -c Release -r win-x64 --self-contained true `
-    -p:PublishSingleFile=true -p:IncludeAllContentForSelfExtract=true `
-    -p:EnableCompressionInSingleFile=false `
-    -o $installerDir
+    $installer = Join-Path $installerDir "Launcher.Installer.exe"
+    if (-not (Test-Path $installer)) {
+        throw "Publish did not produce $installer"
+    }
 
-$installer = Join-Path $installerDir "Launcher.Installer.exe"
-if (-not (Test-Path $installer)) {
-    throw "Publish did not produce $installer"
+    Invoke-SignIfConfigured -File $installer
 }
-
-Invoke-SignIfConfigured -File $installer
 
 Write-Host ""
 Write-Host "Build complete:" -ForegroundColor Green
-Write-Host "  Launcher:   $exe"
-Write-Host "  Installer:  $installer"
+if (-not $InstallerOnly) { Write-Host "  Launcher:   $(Join-Path $publishDir 'FoxLauncher.exe')" }
+if (-not $LauncherOnly) { Write-Host "  Installer:  $(Join-Path $installerDir 'Launcher.Installer.exe')" }

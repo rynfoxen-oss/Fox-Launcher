@@ -10,12 +10,13 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   build:
     runs-on: windows-latest
     env:
-      HAS_SIGNING: ${{ secrets.AZURE_CLIENT_ID != '' }}
+      HAS_SIGNPATH: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -23,26 +24,74 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Publish launcher + installer
+      # 1. Publish the launcher.
+      - name: Publish launcher
         shell: pwsh
-        run: ./build.ps1
+        run: ./build.ps1 -LauncherOnly
 
-      - name: Code-sign (Azure Artifact Signing)
-        if: env.HAS_SIGNING == 'true'
-        uses: azure/artifact-signing-action@v2
+      # 2. Sign the launcher via SignPath.io before the installer embeds it
+      #    (skipped until SIGNPATH_API_TOKEN and the other secrets are set).
+      - name: Upload unsigned launcher
+        if: env.HAS_SIGNPATH == 'true'
+        id: upload-launcher
+        uses: actions/upload-artifact@v4
         with:
-          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-          endpoint: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ secrets.TRUSTED_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ secrets.TRUSTED_SIGNING_PROFILE }}
-          files-folder: artifacts
-          files-folder-filter: exe
-          files-folder-recurse: true
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
+          name: foxlauncher-unsigned
+          path: artifacts/publish/FoxLauncher.exe
+          if-no-files-found: error
+
+      - name: Sign launcher (SignPath)
+        if: env.HAS_SIGNPATH == 'true'
+        id: sign-launcher
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ secrets.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ secrets.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.upload-launcher.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: artifacts/signed-launcher
+
+      - name: Replace launcher with signed copy
+        if: env.HAS_SIGNPATH == 'true'
+        shell: pwsh
+        run: |
+          Move-Item artifacts/signed-launcher/FoxLauncher.exe artifacts/publish/FoxLauncher.exe -Force
+
+      # 3. Publish the installer, which embeds the (signed) launcher.
+      - name: Publish installer
+        shell: pwsh
+        run: ./build.ps1 -InstallerOnly
+
+      # 4. Sign the installer via SignPath.io.
+      - name: Upload unsigned installer
+        if: env.HAS_SIGNPATH == 'true'
+        id: upload-installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: foxlauncher-installer-unsigned
+          path: artifacts/installer/Launcher.Installer.exe
+          if-no-files-found: error
+
+      - name: Sign installer (SignPath)
+        if: env.HAS_SIGNPATH == 'true'
+        id: sign-installer
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ secrets.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ secrets.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.upload-installer.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: artifacts/signed-installer
+
+      - name: Replace installer with signed copy
+        if: env.HAS_SIGNPATH == 'true'
+        shell: pwsh
+        run: |
+          Move-Item artifacts/signed-installer/Launcher.Installer.exe artifacts/installer/Launcher.Installer.exe -Force
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
