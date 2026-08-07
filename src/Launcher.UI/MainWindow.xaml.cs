@@ -2,7 +2,6 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
 using Launcher.ViewModels;
 
 namespace Launcher.UI;
@@ -17,7 +16,6 @@ public partial class MainWindow : Window
     {
         _hub = hub;
         InitializeComponent();
-        AddHandler(UIElement.PreviewMouseWheelEvent, new MouseWheelEventHandler(OnGlobalPreviewMouseWheel), handledEventsToo: true);
         _vm = hub.Container.Resolve<MainViewModel>();
         DataContext = _vm;
         _vm.PropertyChanged += OnVmPropertyChanged;
@@ -92,45 +90,6 @@ public partial class MainWindow : Window
         => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
 
     private void OnCloseClick(object sender, RoutedEventArgs e) => Close();
-
-    private void OnGlobalPreviewMouseWheel(object sender, MouseWheelEventArgs e)
-    {
-        if (e.OriginalSource is not DependencyObject source) return;
-        if (FindVisualParent<ListBox>(source) is not ListBox listBox) return;
-        if (FindVisualChild<ScrollViewer>(listBox) is not ScrollViewer scrollViewer) return;
-
-        var offset = scrollViewer.VerticalOffset - (e.Delta / 3.0);
-        scrollViewer.ScrollToVerticalOffset(offset);
-        e.Handled = true;
-    }
-
-    private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
-    {
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
-        {
-            var child = VisualTreeHelper.GetChild(parent, i);
-            if (child is T typedChild)
-                return typedChild;
-
-            var result = FindVisualChild<T>(child);
-            if (result != null)
-                return result;
-        }
-
-        return null;
-    }
-
-    private static T? FindVisualParent<T>(DependencyObject? child) where T : DependencyObject
-    {
-        while (child != null)
-        {
-            if (child is T parent)
-                return parent;
-            child = VisualTreeHelper.GetParent(child);
-        }
-
-        return null;
-    }
 
     protected override void OnClosed(EventArgs e)
     {

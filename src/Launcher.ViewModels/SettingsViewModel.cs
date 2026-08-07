@@ -54,11 +54,40 @@ public sealed class SettingsViewModel : ViewModelBase
         private set => SetProperty(ref _updateStatus, value);
     }
 
-    public IReadOnlyList<string> Languages { get; } = new[] { "en", "vi", "fr", "de", "es", "ru", "zh", "ja" };
+    public IReadOnlyList<LanguageOption> LanguageOptions { get; } = new[]
+    {
+        new LanguageOption("en", "English"),
+        new LanguageOption("vi", "Tiếng Việt"),
+        new LanguageOption("fr", "Français"),
+        new LanguageOption("de", "Deutsch"),
+        new LanguageOption("es", "Español"),
+        new LanguageOption("ru", "Русский"),
+        new LanguageOption("zh", "中文"),
+        new LanguageOption("ja", "日本語"),
+    };
+
+    /// <summary>Current language code; switching also updates the active localization.</summary>
+    public string SelectedLanguage
+    {
+        get => Settings.Language;
+        set
+        {
+            Settings.Language = value;
+            Services.Localization.SetLanguage(value);
+        }
+    }
 
     public string AppVersion => AppInfo.Version;
 
     public IReadOnlyList<string> Themes { get; } = new[] { "dark", "midnight", "light" };
+
+    public IReadOnlyList<SettingsSection> Sections { get; } = new[]
+    {
+        new SettingsSection("Game & Java", "\uE7FC"),
+        new SettingsSection("Appearance", "\uE790"),
+        new SettingsSection("General", "\uE713"),
+        new SettingsSection("About", "\uE946"),
+    };
 
     public IReadOnlyList<string> AccentColors { get; } = new[]
     {
@@ -110,3 +139,9 @@ public sealed class SettingsViewModel : ViewModelBase
         }
     }
 }
+
+/// <summary>A selectable section in the settings sidebar navigation.</summary>
+public sealed record SettingsSection(string Title, string Glyph);
+
+/// <summary>A selectable launcher language option.</summary>
+public sealed record LanguageOption(string Code, string Name);

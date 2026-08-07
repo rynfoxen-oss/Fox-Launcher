@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Windows.Controls;
 using Launcher.ViewModels;
 
@@ -9,5 +10,14 @@ public partial class SettingsPage : UserControl
     {
         InitializeComponent();
         DataContext = AppHost.Services!.Container.Resolve<SettingsViewModel>();
+    }
+
+    private void OnSectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var index = SectionList.SelectedIndex;
+        GameSection.Visibility = index == 0 ? Visibility.Visible : Visibility.Collapsed;
+        AppearanceSection.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed;
+        GeneralSection.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
+        AboutSection.Visibility = index == 3 ? Visibility.Visible : Visibility.Collapsed;
     }
 }

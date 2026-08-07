@@ -4,12 +4,16 @@ All notable changes to FoxLauncher are documented in this file.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.5] - 2026-08-06
 ### Added
-- Added `CHANGELOG.md` and linked it from `README.md` to make release history easier to track.
+- Added a graphical setup wizard (`Launcher.Installer.exe`) with standard and portable install modes, an install progress view, and a one-click launch step.
+- Redesigned the Settings page with a left-hand navigation (Game, Appearance, General, About) and grouped option cards.
+- Added language selection (English, Vietnamese, French, German, Spanish, Russian, Chinese, Japanese).
+- Added download thread count control, background music toggle with volume slider, and a "create desktop shortcut" option.
 
-### Changed
-- Clarified changelog formatting and release note structure.
+### Fixed
+- Fixed mod list scrolling in the Mods tab so the Installed and Browse Modrinth lists scroll independently and reliably.
+- Removed the broken global mouse-wheel routing that hijacked scrolling across the Mods page and the mod installer window.
 
 ## [1.1.4] - 2026-08-06
 ### Added

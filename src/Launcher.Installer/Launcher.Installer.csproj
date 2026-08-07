@@ -1,25 +1,31 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
     <RootNamespace>Launcher.Installer</RootNamespace>
+    <AssemblyName>Launcher.Installer</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <PublishTrimmed>false</PublishTrimmed>
+    <ApplicationIcon>..\..\assets\icons\fox.ico</ApplicationIcon>
+    <AssemblyTitle>FoxLauncher Installer</AssemblyTitle>
+    <Product>FoxLauncher</Product>
+    <Version>1.1.5</Version>
+    <Description>FoxLauncher 1.1.5 installer with a graphical setup wizard.</Description>
   </PropertyGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\Launcher.Utils\Launcher.Utils.csproj" />
-  </ItemGroup>
 
   <!-- The single-file published launcher is embedded as a resource by build.ps1 -->
   <ItemGroup>
     <EmbeddedResource Include="..\..\artifacts\publish\FoxLauncher.exe"
                       Link="Resources\FoxLauncher.exe"
                       Condition="Exists('..\..\artifacts\publish\FoxLauncher.exe')" />
+    <Resource Include="..\..\assets\icons\fox.ico"
+              Link="Assets\fox.ico" />
   </ItemGroup>
 
 </Project>

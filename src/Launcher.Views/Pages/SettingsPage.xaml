@@ -4,6 +4,9 @@
              xmlns:conv="clr-namespace:Launcher.Views.Converters">
     <UserControl.Resources>
         <conv:ColorToBrushConverter x:Key="ColorToBrush"/>
+        <DataTemplate x:Key="LanguageOptionTemplate">
+            <TextBlock Text="{Binding Name}"/>
+        </DataTemplate>
     </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions>
@@ -16,164 +19,272 @@
             <TextBlock Text="Configure launcher performance, appearance, and behavior." Style="{StaticResource SecondaryText}" Margin="0,6,0,0"/>
         </StackPanel>
 
-        <ScrollViewer Grid.Row="1" Padding="28,16,28,28" VerticalScrollBarVisibility="Auto">
-            <StackPanel MaxWidth="760" HorizontalAlignment="Left">
+        <Grid Grid.Row="1" Margin="28,0,28,28">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="210"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
-                <Border Style="{StaticResource CardPanel}">
-                    <StackPanel>
-                        <TextBlock Text="Java &amp; memory" Style="{StaticResource H2Text}"/>
-                        <Grid Margin="0,18,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                <TextBlock Text="Max memory" Style="{StaticResource CaptionText}"/>
-                                <Slider Minimum="1024" Maximum="16384" TickFrequency="1024" IsSnapToTickEnabled="True"
-                                        Value="{Binding Settings.MaxMemoryMb, Mode=TwoWay}" Style="{StaticResource AccentSlider}"/>
-                                <TextBlock Text="{Binding Settings.MaxMemoryMb, StringFormat={}{0} MB}" Style="{StaticResource MutedText}"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="1">
-                                <TextBlock Text="Min memory" Style="{StaticResource CaptionText}"/>
-                                <Slider Minimum="256" Maximum="8192" TickFrequency="256" IsSnapToTickEnabled="True"
-                                        Value="{Binding Settings.MinMemoryMb, Mode=TwoWay}" Style="{StaticResource AccentSlider}"/>
-                                <TextBlock Text="{Binding Settings.MinMemoryMb, StringFormat={}{0} MB}" Style="{StaticResource MutedText}"/>
-                            </StackPanel>
-                        </Grid>
-
-                        <TextBlock Text="Java path" Style="{StaticResource CaptionText}" Margin="0,16,0,6"/>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBox Grid.Column="0" Text="{Binding Settings.JavaPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                     Style="{StaticResource InputTextBox}" Margin="0,0,10,0"/>
-                            <Button Grid.Column="1" Content="Browse" Style="{StaticResource GhostButton}" Command="{Binding BrowseJavaCommand}"/>
-                            <Button Grid.Column="2" Content="Auto detect" Style="{StaticResource GhostButton}" Command="{Binding DetectJavaCommand}"/>
-                        </Grid>
-                        <TextBlock Text="{Binding JavaStatus}" Style="{StaticResource MutedText}" Margin="0,8,0,0"/>
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{StaticResource CardPanel}">
-                    <StackPanel>
-                        <TextBlock Text="Window" Style="{StaticResource H2Text}"/>
-                        <Grid Margin="0,18,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                <TextBlock Text="Width" Style="{StaticResource CaptionText}"/>
-                                <TextBox Text="{Binding Settings.WindowWidth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                         Style="{StaticResource InputTextBox}"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="1">
-                                <TextBlock Text="Height" Style="{StaticResource CaptionText}"/>
-                                <TextBox Text="{Binding Settings.WindowHeight, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                         Style="{StaticResource InputTextBox}"/>
-                            </StackPanel>
-                        </Grid>
-                        <WrapPanel Margin="0,18,0,0" ItemHeight="30" ItemWidth="220" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
-                            <CheckBox Content="Fullscreen" Style="{StaticResource AccentCheckBox}"
-                                      IsChecked="{Binding Settings.Fullscreen, Mode=TwoWay}"/>
-                            <CheckBox Content="Show FPS" Style="{StaticResource AccentCheckBox}"
-                                      IsChecked="{Binding Settings.ShowFps, Mode=TwoWay}"/>
-                        </WrapPanel>
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{StaticResource CardPanel}">
-                    <StackPanel>
-                        <TextBlock Text="Appearance" Style="{StaticResource H2Text}"/>
-                        <Grid Margin="0,18,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Theme" Style="{StaticResource CaptionText}" VerticalAlignment="Center"/>
-                            <ComboBox Grid.Column="1" ItemsSource="{Binding Themes}" SelectedItem="{Binding Settings.Theme, Mode=TwoWay}"
-                                      Style="{StaticResource InputComboBox}" Width="160" HorizontalAlignment="Left" Margin="12,0,0,0"/>
-                            <TextBlock Grid.Column="2" Text="Accent" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="12,0,0,0"/>
-                            <ItemsControl Grid.Column="3" ItemsSource="{Binding AccentColors}" Margin="12,0,0,0">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Horizontal"/>
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Button Width="22" Height="22" Margin="3" Cursor="Hand"
-                                                Command="{Binding DataContext.AccentCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                CommandParameter="{Binding}">
-                                            <Button.Template>
-                                                <ControlTemplate TargetType="Button">
-                                                    <Border CornerRadius="11"
-                                                            Background="{Binding Converter={StaticResource ColorToBrush}}"
-                                                            BorderBrush="{StaticResource BorderStrongBrush}"
-                                                            BorderThickness="1"/>
-                                                </ControlTemplate>
-                                            </Button.Template>
-                                        </Button>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </Grid>
-                        <TextBlock Text="Click a color to apply it immediately." Style="{StaticResource MutedText}" Margin="0,12,0,0"/>
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{StaticResource CardPanel}">
-                    <StackPanel>
-                        <TextBlock Text="Behavior" Style="{StaticResource H2Text}"/>
-                        <UniformGrid Columns="2" Margin="0,18,0,0" HorizontalAlignment="Left">
-                            <CheckBox Content="Close launcher after game starts" Style="{StaticResource AccentCheckBox}"
-                                      IsChecked="{Binding Settings.CloseAfterLaunch, Mode=TwoWay}" Margin="0,0,16,12"/>
-                            <CheckBox Content="Enable Discord Rich Presence" Style="{StaticResource AccentCheckBox}"
-                                      IsChecked="{Binding Settings.EnableDiscordRpc, Mode=TwoWay}" Margin="0,0,0,12"/>
-                            <CheckBox Content="Check for updates automatically" Style="{StaticResource AccentCheckBox}"
-                                      IsChecked="{Binding Settings.AutoUpdate, Mode=TwoWay}" Margin="0,0,16,12"/>
-                            <CheckBox Content="Auto-detect Java on startup" Style="{StaticResource AccentCheckBox}"
-                                      IsChecked="{Binding Settings.AutoJavaDetect, Mode=TwoWay}" Margin="0,0,0,12"/>
-                            <CheckBox Content="Background music" Style="{StaticResource AccentCheckBox}"
-                                      IsChecked="{Binding Settings.BackgroundMusic, Mode=TwoWay}" Margin="0,0,16,0"/>
-                        </UniformGrid>
-                        <StackPanel Margin="0,18,0,0">
-                            <TextBlock Text="Music volume" Style="{StaticResource CaptionText}"/>
-                            <Slider Minimum="0" Maximum="100" Value="{Binding Settings.MusicVolume, Mode=TwoWay}"
-                                    Style="{StaticResource AccentSlider}"/>
-                            <TextBlock Text="{Binding Settings.MusicVolume, StringFormat={}{0}%}" Style="{StaticResource MutedText}"/>
+            <!-- ===== Section navigation ===== -->
+            <ListBox x:Name="SectionList" Grid.Column="0" Style="{StaticResource NavListBox}"
+                     ItemsSource="{Binding Sections}" SelectedIndex="0" SelectionChanged="OnSectionChanged"
+                     Margin="0,20,16,0" VerticalAlignment="Top">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal" Margin="10,8">
+                            <TextBlock Text="{Binding Glyph}" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                       Foreground="{DynamicResource TextSecondary}" Width="24" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding Title}" Style="{StaticResource BaseText}"/>
                         </StackPanel>
-                        <WrapPanel Margin="0,20,0,0" Orientation="Horizontal" ItemHeight="36" ItemWidth="180">
-                            <Button Content="Create desktop shortcut" Style="{StaticResource GhostButton}" Command="{Binding CreateShortcutCommand}"/>
-                            <Button Content="Open launcher folder" Style="{StaticResource GhostButton}" Margin="10,0,0,0"
-                                    Command="{Binding OpenLauncherFolderCommand}"/>
-                            <Button Content="Open logs folder" Style="{StaticResource GhostButton}" Margin="10,0,0,0"
-                                    Command="{Binding OpenLogsFolderCommand}"/>
-                        </WrapPanel>
-                    </StackPanel>
-                </Border>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
 
-                <Border Style="{StaticResource CardPanel}">
-                    <StackPanel>
-                        <TextBlock Text="About" Style="{StaticResource H2Text}"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                            <TextBlock Text="FoxLauncher" Style="{StaticResource SectionTitleText}"/>
-                            <TextBlock Text="{Binding AppVersion}" Style="{StaticResource MutedText}" Margin="10,0,0,0" VerticalAlignment="Center"/>
-                        </StackPanel>
-                        <TextBlock Text="A modern, open-source Minecraft launcher." Style="{StaticResource SecondaryText}" Margin="0,6,0,0"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,16,0,0" VerticalAlignment="Center">
-                            <Button Content="Check for updates" Style="{StaticResource GhostButton}" Command="{Binding CheckForUpdatesCommand}"/>
-                            <TextBlock Text="{Binding UpdateStatus}" Style="{StaticResource MutedText}" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="420"/>
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
+            <!-- ===== Section content ===== -->
+            <ScrollViewer Grid.Column="1" Padding="0,20,0,0" VerticalScrollBarVisibility="Auto">
+                <StackPanel MaxWidth="760" HorizontalAlignment="Left">
 
-            </StackPanel>
-        </ScrollViewer>
+                    <!-- ============ Game & Java ============ -->
+                    <Grid x:Name="GameSection">
+                        <StackPanel>
+                            <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <TextBlock Text="Java &amp; memory" Style="{StaticResource H2Text}"/>
+                                    <TextBlock Text="How much memory to give the game and which Java to use." Style="{StaticResource MutedText}"/>
+
+                                    <Grid Margin="0,18,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                            <Grid>
+                                                <TextBlock Text="Max memory" Style="{StaticResource CaptionText}"/>
+                                                <TextBlock Text="{Binding Settings.MaxMemoryMb, StringFormat={}{0} MB}"
+                                                           Style="{StaticResource MutedText}" HorizontalAlignment="Right"/>
+                                            </Grid>
+                                            <Slider Minimum="1024" Maximum="16384" TickFrequency="1024" IsSnapToTickEnabled="True"
+                                                    Value="{Binding Settings.MaxMemoryMb, Mode=TwoWay}" Style="{StaticResource AccentSlider}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1">
+                                            <Grid>
+                                                <TextBlock Text="Min memory" Style="{StaticResource CaptionText}"/>
+                                                <TextBlock Text="{Binding Settings.MinMemoryMb, StringFormat={}{0} MB}"
+                                                           Style="{StaticResource MutedText}" HorizontalAlignment="Right"/>
+                                            </Grid>
+                                            <Slider Minimum="256" Maximum="8192" TickFrequency="256" IsSnapToTickEnabled="True"
+                                                    Value="{Binding Settings.MinMemoryMb, Mode=TwoWay}" Style="{StaticResource AccentSlider}"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <TextBlock Text="Java path" Style="{StaticResource CaptionText}" Margin="0,18,0,6"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox Grid.Column="0" Text="{Binding Settings.JavaPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource InputTextBox}" Margin="0,0,10,0"/>
+                                        <Button Grid.Column="1" Content="Browse" Style="{StaticResource GhostButton}" Command="{Binding BrowseJavaCommand}"/>
+                                        <Button Grid.Column="2" Content="Auto detect" Style="{StaticResource GhostButton}" Command="{Binding DetectJavaCommand}"/>
+                                    </Grid>
+                                    <TextBlock Text="{Binding JavaStatus}" Style="{StaticResource MutedText}" Margin="0,8,0,0"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource CardPanel}">
+                                <StackPanel>
+                                    <TextBlock Text="Window" Style="{StaticResource H2Text}"/>
+                                    <TextBlock Text="The size and mode the game starts in." Style="{StaticResource MutedText}"/>
+
+                                    <Grid Margin="0,18,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                            <TextBlock Text="Width" Style="{StaticResource CaptionText}"/>
+                                            <TextBox Text="{Binding Settings.WindowWidth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     Style="{StaticResource InputTextBox}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="Height" Style="{StaticResource CaptionText}"/>
+                                            <TextBox Text="{Binding Settings.WindowHeight, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     Style="{StaticResource InputTextBox}"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <StackPanel Margin="0,18,0,0">
+                                        <CheckBox Content="Fullscreen" Style="{StaticResource ToggleSwitch}"
+                                                  IsChecked="{Binding Settings.Fullscreen, Mode=TwoWay}"/>
+                                        <TextBlock Text="Launch the game in fullscreen mode." Style="{StaticResource MutedText}" Margin="56,2,0,0"/>
+                                        <CheckBox Content="Show FPS" Style="{StaticResource ToggleSwitch}" Margin="0,14,0,0"
+                                                  IsChecked="{Binding Settings.ShowFps, Mode=TwoWay}"/>
+                                        <TextBlock Text="Display an FPS counter in the corner of the game." Style="{StaticResource MutedText}" Margin="56,2,0,0"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- ============ Appearance ============ -->
+                    <Grid x:Name="AppearanceSection" Visibility="Collapsed">
+                        <StackPanel>
+                            <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <TextBlock Text="Theme" Style="{StaticResource H2Text}"/>
+                                    <TextBlock Text="Pick the launcher's overall look." Style="{StaticResource MutedText}"/>
+                                    <ComboBox ItemsSource="{Binding Themes}" SelectedItem="{Binding Settings.Theme, Mode=TwoWay}"
+                                              Style="{StaticResource InputComboBox}" Width="220" HorizontalAlignment="Left" Margin="0,16,0,0"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource CardPanel}">
+                                <StackPanel>
+                                    <TextBlock Text="Accent color" Style="{StaticResource H2Text}"/>
+                                    <TextBlock Text="Click a color to apply it immediately." Style="{StaticResource MutedText}"/>
+                                    <ItemsControl ItemsSource="{Binding AccentColors}" Margin="0,16,0,0">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Button Width="26" Height="26" Margin="4" Cursor="Hand"
+                                                        Command="{Binding DataContext.AccentCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                        CommandParameter="{Binding}">
+                                                    <Button.Template>
+                                                        <ControlTemplate TargetType="Button">
+                                                            <Border x:Name="Bd" CornerRadius="13"
+                                                                    Background="{Binding Converter={StaticResource ColorToBrush}}"
+                                                                    BorderBrush="{StaticResource BorderStrongBrush}"
+                                                                    BorderThickness="1"/>
+                                                            <ControlTemplate.Triggers>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter TargetName="Bd" Property="RenderTransform">
+                                                                        <Setter.Value>
+                                                                            <ScaleTransform ScaleX="1.15" ScaleY="1.15"/>
+                                                                        </Setter.Value>
+                                                                    </Setter>
+                                                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource TextSecondary}"/>
+                                                                </Trigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Button.Template>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- ============ General ============ -->
+                    <Grid x:Name="GeneralSection" Visibility="Collapsed">
+                        <StackPanel>
+                            <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <TextBlock Text="Language &amp; downloads" Style="{StaticResource H2Text}"/>
+                                    <TextBlock Text="Interface language and download performance." Style="{StaticResource MutedText}"/>
+
+                                    <TextBlock Text="Language" Style="{StaticResource CaptionText}" Margin="0,18,0,6"/>
+                                    <ComboBox ItemsSource="{Binding LanguageOptions}" SelectedValuePath="Code"
+                                              SelectedValue="{Binding SelectedLanguage, Mode=TwoWay}"
+                                              ItemTemplate="{StaticResource LanguageOptionTemplate}"
+                                              Style="{StaticResource InputComboBox}" Width="220" HorizontalAlignment="Left"/>
+
+                                    <TextBlock Text="Download threads" Style="{StaticResource CaptionText}" Margin="0,18,0,6"/>
+                                    <Slider Minimum="1" Maximum="32" TickFrequency="1" IsSnapToTickEnabled="True"
+                                            Value="{Binding Settings.DownloadThreads, Mode=TwoWay}" Style="{StaticResource AccentSlider}"/>
+                                    <TextBlock Text="{Binding Settings.DownloadThreads, StringFormat={}{0} parallel downloads}"
+                                               Style="{StaticResource MutedText}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <TextBlock Text="Behavior" Style="{StaticResource H2Text}"/>
+                                    <TextBlock Text="How the launcher behaves while running." Style="{StaticResource MutedText}"/>
+
+                                    <StackPanel Margin="0,18,0,0">
+                                        <CheckBox Content="Close launcher after game starts" Style="{StaticResource ToggleSwitch}"
+                                                  IsChecked="{Binding Settings.CloseAfterLaunch, Mode=TwoWay}"/>
+                                        <TextBlock Text="Closes the launcher once the game window appears." Style="{StaticResource MutedText}" Margin="56,2,0,0"/>
+
+                                        <CheckBox Content="Enable Discord Rich Presence" Style="{StaticResource ToggleSwitch}" Margin="0,14,0,0"
+                                                  IsChecked="{Binding Settings.EnableDiscordRpc, Mode=TwoWay}"/>
+                                        <TextBlock Text="Show what you're playing on Discord." Style="{StaticResource MutedText}" Margin="56,2,0,0"/>
+
+                                        <CheckBox Content="Check for updates automatically" Style="{StaticResource ToggleSwitch}" Margin="0,14,0,0"
+                                                  IsChecked="{Binding Settings.AutoUpdate, Mode=TwoWay}"/>
+                                        <TextBlock Text="Automatically look for a new version on startup." Style="{StaticResource MutedText}" Margin="56,2,0,0"/>
+
+                                        <CheckBox Content="Auto-detect Java on startup" Style="{StaticResource ToggleSwitch}" Margin="0,14,0,0"
+                                                  IsChecked="{Binding Settings.AutoJavaDetect, Mode=TwoWay}"/>
+                                        <TextBlock Text="Search for an installed Java runtime automatically." Style="{StaticResource MutedText}" Margin="56,2,0,0"/>
+
+                                        <CheckBox Content="Create desktop shortcut on install" Style="{StaticResource ToggleSwitch}" Margin="0,14,0,0"
+                                                  IsChecked="{Binding Settings.CreateDesktopShortcut, Mode=TwoWay}"/>
+                                        <TextBlock Text="Add a FoxLauncher shortcut to the desktop during installation." Style="{StaticResource MutedText}" Margin="56,2,0,0"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource CardPanel}">
+                                <StackPanel>
+                                    <TextBlock Text="Audio" Style="{StaticResource H2Text}"/>
+                                    <TextBlock Text="Background music played while browsing the launcher." Style="{StaticResource MutedText}"/>
+
+                                    <CheckBox Content="Play background music" Style="{StaticResource ToggleSwitch}" Margin="0,18,0,0"
+                                              IsChecked="{Binding Settings.BackgroundMusic, Mode=TwoWay}"/>
+                                    <TextBlock Text="Music volume" Style="{StaticResource CaptionText}" Margin="0,16,0,6"/>
+                                    <Slider Minimum="0" Maximum="100" Value="{Binding Settings.MusicVolume, Mode=TwoWay}"
+                                            Style="{StaticResource AccentSlider}" IsEnabled="{Binding Settings.BackgroundMusic}"/>
+                                    <TextBlock Text="{Binding Settings.MusicVolume, StringFormat={}{0}%}" Style="{StaticResource MutedText}"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- ============ About ============ -->
+                    <Grid x:Name="AboutSection" Visibility="Collapsed">
+                        <StackPanel>
+                            <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <TextBlock Text="About" Style="{StaticResource H2Text}"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                        <TextBlock Text="FoxLauncher" Style="{StaticResource SectionTitleText}"/>
+                                        <TextBlock Text="{Binding AppVersion}" Style="{StaticResource MutedText}" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <TextBlock Text="A modern, open-source Minecraft launcher." Style="{StaticResource SecondaryText}" Margin="0,6,0,0"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,16,0,0" VerticalAlignment="Center">
+                                        <Button Content="Check for updates" Style="{StaticResource GhostButton}" Command="{Binding CheckForUpdatesCommand}"/>
+                                        <TextBlock Text="{Binding UpdateStatus}" Style="{StaticResource MutedText}" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="420" Margin="12,0,0,0"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource CardPanel}">
+                                <StackPanel>
+                                    <TextBlock Text="Actions" Style="{StaticResource H2Text}"/>
+                                    <TextBlock Text="Shortcuts and quick access to launcher folders." Style="{StaticResource MutedText}"/>
+                                    <WrapPanel Margin="0,16,0,0" Orientation="Horizontal" ItemHeight="40" ItemWidth="190">
+                                        <Button Content="Create desktop shortcut" Style="{StaticResource GhostButton}" Command="{Binding CreateShortcutCommand}"/>
+                                        <Button Content="Open launcher folder" Style="{StaticResource GhostButton}" Margin="10,0,0,0"
+                                                Command="{Binding OpenLauncherFolderCommand}"/>
+                                        <Button Content="Open logs folder" Style="{StaticResource GhostButton}" Margin="10,0,0,0"
+                                                Command="{Binding OpenLogsFolderCommand}"/>
+                                    </WrapPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
     </Grid>
 </UserControl>
