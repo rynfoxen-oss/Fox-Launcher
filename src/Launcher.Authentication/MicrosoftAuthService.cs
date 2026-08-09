@@ -160,6 +160,7 @@ public sealed class MicrosoftAuthService
         var profile = Json.DeserializeApi<MinecraftProfile>(profileJson)
                       ?? new MinecraftProfile();
 
+        var activeSkin = profile?.Skins?.FirstOrDefault(s => s.State == "ACTIVE");
         var account = new Launcher.Models.Account
         {
             Type = Launcher.Models.AccountType.Microsoft,
@@ -172,7 +173,8 @@ public sealed class MicrosoftAuthService
             XboxUserId = xsts?.DisplayClaims?.Xui?.FirstOrDefault()?.Xid ?? "",
             ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(token.ExpiresIn > 0 ? token.ExpiresIn : 3600),
             CreatedAt = DateTimeOffset.UtcNow,
-            SkinUrl = profile.Skins?.FirstOrDefault(s => s.State == "ACTIVE")?.Url ?? ""
+            SkinUrl = activeSkin?.Url ?? "",
+            SkinVariant = activeSkin?.Variant ?? ""
         };
         account.UsernameHistory.Add(account.Username);
         return account;
@@ -322,4 +324,5 @@ internal sealed class MinecraftSkin
     [JsonPropertyName("id")] public string? Id { get; set; }
     [JsonPropertyName("state")] public string? State { get; set; }
     [JsonPropertyName("url")] public string? Url { get; set; }
+    [JsonPropertyName("variant")] public string? Variant { get; set; }
 }

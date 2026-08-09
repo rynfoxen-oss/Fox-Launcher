@@ -107,6 +107,18 @@ public sealed class AppSettings
     /// <summary>Microsoft OAuth application (client) id.</summary>
     public string MicrosoftClientId { get; set; } = "replace-with-your-azure-client-id";
 
+    /// <summary>Whether the interactive 3D skin preview is enabled (falls back to 2D).</summary>
+    public bool SkinPreview3D { get; set; } = true;
+
+    /// <summary>Model selection for the skin preview: "Auto", "Classic" or "Slim".</summary>
+    public string SkinModelPreference { get; set; } = "Auto";
+
+    /// <summary>Whether the idle animation in the skin preview is enabled.</summary>
+    public bool SkinAnimation { get; set; } = true;
+
+    /// <summary>Preview rendering quality: "Low", "Medium" or "High".</summary>
+    public string SkinPreviewQuality { get; set; } = "Medium";
+
     /// <summary>Last set of saved server entries.</summary>
     public List<Models.ServerEntry> Servers { get; set; } = new();
 

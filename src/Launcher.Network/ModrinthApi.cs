@@ -14,16 +14,18 @@ public sealed class ModrinthApi
 
     public ModrinthApi(Http http) => _http = http;
 
-    /// <summary>Searches for projects, optionally filtered by loader, game version
-    /// and category, sorted by the given index (relevance/downloads/updated/newest).</summary>
+    /// <summary>Searches for projects, optionally filtered by loader, game version,
+    /// project type (mod/shader/resourcepack/...) and category, sorted by the given
+    /// index (relevance/downloads/updated/newest).</summary>
     public async Task<ModrinthSearchResult> SearchAsync(
         string query,
-        ModLoaderType loader,
+        ModLoaderType? loader,
         string? gameVersion,
         int limit = 30,
         string index = "relevance",
         string? category = null,
         int offset = 0,
+        string? projectType = null,
         CancellationToken ct = default)
     {
         var facets = new List<string>();
@@ -39,6 +41,7 @@ public sealed class ModrinthApi
         if (!string.IsNullOrEmpty(loaders)) facets.Add($"[\"categories:{loaders}\"]");
         if (!string.IsNullOrEmpty(gameVersion)) facets.Add($"[\"versions:{gameVersion}\"]");
         if (!string.IsNullOrEmpty(category)) facets.Add($"[\"categories:{category}\"]");
+        if (!string.IsNullOrEmpty(projectType)) facets.Add($"[\"project_type:{projectType}\"]");
 
         var facetQuery = facets.Count > 0
             ? $"&facets={Uri.EscapeDataString($"[{string.Join(",", facets)}]") }"
@@ -63,9 +66,11 @@ public sealed class ModrinthApi
         return Json.DeserializeApi<ModrinthProject>(raw) ?? new();
     }
 
-    /// <summary>Returns versions of a project compatible with the given loader/game.</summary>
+    /// <summary>Returns versions of a project compatible with the given loader/game.
+    /// When <paramref name="loader"/> is null (shaders, resource packs) the result is
+    /// filtered by game version only.</summary>
     public async Task<List<ModrinthVersion>> GetVersionsAsync(
-        string projectId, ModLoaderType loader, string? gameVersion, CancellationToken ct = default)
+        string projectId, ModLoaderType? loader, string? gameVersion, CancellationToken ct = default)
     {
         var loaders = loader switch
         {
@@ -232,4 +237,5 @@ public sealed class ModrinthDependency
     [JsonPropertyName("project_id")] public string? ProjectId { get; set; }
     [JsonPropertyName("dependency_type")] public string DependencyType { get; set; } = "";
     [JsonPropertyName("version_id")] public string? VersionId { get; set; }
+    [JsonPropertyName("version_range")] public string? VersionRange { get; set; }
 }

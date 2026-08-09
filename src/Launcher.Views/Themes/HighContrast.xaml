@@ -1,0 +1,32 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- High-contrast theme: maximum distinction between surfaces and text,
+         thin borders, and no translucent layers. Works with any accent. -->
+    <SolidColorBrush x:Key="WindowBackground" Color="#FF000000"/>
+    <SolidColorBrush x:Key="TitleBarBackground" Color="#FF000000"/>
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#FF000000"/>
+    <SolidColorBrush x:Key="SurfaceAltBrush" Color="#FF111111"/>
+    <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#FF1E1E1E"/>
+    <SolidColorBrush x:Key="CardBrush" Color="#FF050505"/>
+    <SolidColorBrush x:Key="BorderBrush" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="BorderStrongBrush" Color="#FFFFFFFF"/>
+
+    <SolidColorBrush x:Key="TextPrimary" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="TextSecondary" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="TextMuted" Color="#FFD0D0D0"/>
+
+    <SolidColorBrush x:Key="ScrollBarThumbBrush" Color="#FFE0E0E0"/>
+    <SolidColorBrush x:Key="ScrollBarThumbHoverBrush" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="ScrollBarThumbPressedBrush" Color="#FFFFFFFF"/>
+
+    <SolidColorBrush x:Key="BackgroundOverlayBrush" Color="#FF000000"/>
+
+    <CornerRadius x:Key="CardRadius">4</CornerRadius>
+    <CornerRadius x:Key="ButtonRadius">2</CornerRadius>
+    <CornerRadius x:Key="InputRadius">2</CornerRadius>
+
+    <!-- No soft shadows in high contrast; a crisp hairline reads better. -->
+    <DropShadowEffect x:Key="CardShadow" Color="#000000" BlurRadius="0" ShadowDepth="0" Opacity="0"/>
+
+</ResourceDictionary>

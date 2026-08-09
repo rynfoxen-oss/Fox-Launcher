@@ -6,10 +6,25 @@
     <Grid>
         <Border Background="{DynamicResource SurfaceAltBrush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                CornerRadius="24" Padding="10" HorizontalAlignment="Center" VerticalAlignment="Center">
+                CornerRadius="24" Padding="8">
             <Grid>
-                <Rectangle x:Name="Figure" HorizontalAlignment="Center" VerticalAlignment="Center"
-                           RenderOptions.BitmapScalingMode="NearestNeighbor" SnapsToDevicePixels="True"/>
+                <Viewport3D x:Name="Viewport" ClipToBounds="True">
+                    <Viewport3D.Camera>
+                        <PerspectiveCamera x:Name="Camera" Position="14,13,14" LookDirection="-14,0,-14"
+                                           UpDirection="0,1,0" FieldOfView="36"
+                                           NearPlaneDistance="0.5" FarPlaneDistance="500"/>
+                    </Viewport3D.Camera>
+                    <ModelVisual3D x:Name="LightsRoot">
+                        <ModelVisual3D.Content>
+                            <Model3DGroup>
+                                <AmbientLight Color="#FF656565"/>
+                                <DirectionalLight Color="#FFEBEBEB" Direction="0.5,-1,-0.6"/>
+                                <DirectionalLight Color="#FFA8A8A8" Direction="-0.55,-0.65,-0.5"/>
+                            </Model3DGroup>
+                        </ModelVisual3D.Content>
+                    </ModelVisual3D>
+                    <ModelVisual3D x:Name="FigureRoot"/>
+                </Viewport3D>
                 <ctl:ProgressRing x:Name="Busy" Width="24" Height="24" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Grid>
         </Border>

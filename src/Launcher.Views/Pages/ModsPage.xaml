@@ -105,6 +105,8 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <Grid>
                     <TextBox x:Name="SearchBox" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
@@ -168,13 +170,15 @@
                 </StackPanel>
                 <Button Grid.Column="3" Content="Import ZIP" Style="{StaticResource GhostButton}" Margin="10,0,0,0"
                         Command="{Binding ImportZipCommand}"/>
-                <Button Grid.Column="4" Content="Mod Installer" Style="{StaticResource GhostButton}" Margin="10,0,0,0"
+                <Button Grid.Column="4" Content="Mods" Style="{StaticResource GhostButton}" Margin="10,0,0,0"
                         Command="{Binding OpenInstallerCommand}"/>
-                <Button Grid.Column="5" Content="Install JAR" Style="{StaticResource GhostButton}" Margin="10,0,0,0"
-                        Command="{Binding InstallLocalCommand}"/>
-                <Button Grid.Column="6" Content="Open folder" Style="{StaticResource GhostButton}" Margin="10,0,0,0"
+                <Button Grid.Column="5" Content="Shaders" Style="{StaticResource GhostButton}" Margin="10,0,0,0"
+                        Command="{Binding OpenShadersInstallerCommand}"/>
+                <Button Grid.Column="6" Content="Packs" Style="{StaticResource GhostButton}" Margin="10,0,0,0"
+                        Command="{Binding OpenResourcePacksInstallerCommand}"/>
+                <Button Grid.Column="7" Content="Open folder" Style="{StaticResource GhostButton}" Margin="10,0,0,0"
                         Command="{Binding OpenFolderCommand}"/>
-                <Button Grid.Column="7" Content="Manage" Style="{StaticResource GhostButton}" Margin="10,0,0,0"
+                <Button Grid.Column="8" Content="Manage" Style="{StaticResource GhostButton}" Margin="10,0,0,0"
                         Click="OnManageMenuOpen">
                     <Button.ContextMenu>
                         <ContextMenu>
@@ -577,6 +581,10 @@
                                 Command="{Binding InstallSelectedCommand}"
                                 CommandParameter="{Binding DetailMod}"
                                 IsEnabled="{Binding DetailMod.Installed, Converter={StaticResource InverseBoolean}}"/>
+                        <Button Content="Change version" Style="{StaticResource GhostButton}" Margin="0,0,0,6" HorizontalAlignment="Stretch"
+                                Command="{Binding ChangeVersionCommand}"
+                                CommandParameter="{Binding DetailMod}"
+                                IsEnabled="{Binding DetailMod.Installed}"/>
                         <Button Content="View on Modrinth" Style="{StaticResource GhostButton}" Margin="0,0,0,6" HorizontalAlignment="Stretch"
                                 Command="{Binding OpenModrinthCommand}"/>
 

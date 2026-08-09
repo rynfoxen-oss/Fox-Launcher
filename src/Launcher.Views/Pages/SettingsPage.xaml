@@ -462,6 +462,43 @@
                                 </StackPanel>
                             </Border>
 
+                            <Border Style="{StaticResource CardPanel}" Margin="0,0,0,12">
+                                <StackPanel>
+                                    <TextBlock Text="Skin preview" Style="{StaticResource SettingsH2Text}"/>
+                                    <TextBlock Text="How the 3D character preview on the Accounts page behaves." Style="{StaticResource SettingsMutedText}"/>
+
+                                    <StackPanel Margin="0,18,0,0">
+                                        <CheckBox Content="3D skin preview" Style="{StaticResource SettingsToggle}"
+                                                  IsChecked="{Binding Settings.SkinPreview3D, Mode=TwoWay}"/>
+                                        <TextBlock Text="Shows the skin on an interactive 3D figure instead of a flat image."
+                                                   Style="{StaticResource SettingsMutedText}" Margin="56,2,0,0"/>
+
+                                        <CheckBox Content="Idle animation" Style="{StaticResource SettingsToggle}" Margin="0,18,0,0"
+                                                  IsChecked="{Binding Settings.SkinAnimation, Mode=TwoWay}"/>
+                                        <TextBlock Text="Slight head and arm movement while the figure is on screen."
+                                                   Style="{StaticResource SettingsMutedText}" Margin="56,2,0,0"/>
+
+                                        <TextBlock Text="Default model" Style="{StaticResource SettingsCaptionText}" Margin="0,18,0,8"/>
+                                        <ComboBox Style="{StaticResource SettingsComboBox}" Width="200" HorizontalAlignment="Left"
+                                                  SelectedValue="{Binding Settings.SkinModelPreference, Mode=TwoWay}" SelectedValuePath="Content">
+                                            <ComboBoxItem Content="Auto"/>
+                                            <ComboBoxItem Content="Classic"/>
+                                            <ComboBoxItem Content="Slim"/>
+                                        </ComboBox>
+                                        <TextBlock Text="Auto uses the account's declared model, otherwise detects it from the skin."
+                                                   Style="{StaticResource SettingsMutedText}" Margin="0,8,0,0"/>
+
+                                        <TextBlock Text="Preview quality" Style="{StaticResource SettingsCaptionText}" Margin="0,18,0,8"/>
+                                        <ComboBox Style="{StaticResource SettingsComboBox}" Width="200" HorizontalAlignment="Left"
+                                                  SelectedValue="{Binding Settings.SkinPreviewQuality, Mode=TwoWay}" SelectedValuePath="Content">
+                                            <ComboBoxItem Content="Low"/>
+                                            <ComboBoxItem Content="Medium"/>
+                                            <ComboBoxItem Content="High"/>
+                                        </ComboBox>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
                             <Border Style="{StaticResource CardPanel}">
                                 <StackPanel>
                                     <TextBlock Text="Accent color" Style="{StaticResource SettingsH2Text}"/>

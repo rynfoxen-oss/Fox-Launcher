@@ -12,6 +12,7 @@
     <Product>FoxLauncher</Product>
     <Description>FoxLauncher 1.0.3 — reliable auto-updates and improved update dialog.</Description>
     <Version>1.0.3</Version>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>

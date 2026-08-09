@@ -173,20 +173,56 @@ public sealed class ModManagerService
         }
     }
 
-    /// <summary>Checks for updates for a specific mod.</summary>
+    /// <summary>Checks for updates for a specific mod, preferring the newest version
+    /// that does not conflict with other installed mods.</summary>
     public async Task<(bool Success, string Message)> UpdateModAsync(string instanceId, ModInfo mod, ModLoaderType loader, string gameVersion)
     {
         if (string.IsNullOrEmpty(mod.ProjectId) || string.IsNullOrEmpty(mod.VersionId))
             return (false, "Mod has no project or version ID.");
 
+        var installed = ListMods(instanceId);
+        return await UpdateModCoreAsync(instanceId, mod, installed, loader, gameVersion,
+            new Dictionary<string, List<ModrinthVersion>>());
+    }
+
+    /// <summary>Checks for and installs updates for all mods in an instance, sharing
+    /// version data between mods so conflict detection stays within API rate limits.</summary>
+    public async Task<(int Updated, int Failed, int Skipped)> UpdateAllModsAsync(string instanceId, ModLoaderType loader, string gameVersion)
+    {
+        var mods = ListMods(instanceId);
+        var cache = new Dictionary<string, List<ModrinthVersion>>();
+        int updated = 0, failed = 0, skipped = 0;
+
+        foreach (var mod in mods)
+        {
+            if (string.IsNullOrEmpty(mod.ProjectId) || string.IsNullOrEmpty(mod.VersionId))
+            {
+                skipped++;
+                continue;
+            }
+
+            var (success, _) = await UpdateModCoreAsync(instanceId, mod, mods, loader, gameVersion, cache);
+            if (success) updated++;
+            else failed++;
+        }
+
+        return (updated, failed, skipped);
+    }
+
+    private async Task<(bool Success, string Message)> UpdateModCoreAsync(
+        string instanceId, ModInfo mod, IReadOnlyList<ModInfo> installed,
+        ModLoaderType loader, string gameVersion, Dictionary<string, List<ModrinthVersion>> cache)
+    {
         try
         {
-            var versions = await _modrinth.GetVersionsAsync(mod.ProjectId, loader, gameVersion);
-            var latest = versions.FirstOrDefault();
-            if (latest == null || latest.Id == mod.VersionId)
+            var (best, conflictReason) = await FindBestCompatibleVersionAsync(
+                instanceId, mod, installed, loader, gameVersion, cache);
+            if (best is null)
+                return (false, conflictReason ?? "No compatible version available.");
+            if (best.Id == mod.VersionId)
                 return (false, "No updates available.");
 
-            var file = latest.Files.FirstOrDefault()
+            var file = best.Files.FirstOrDefault()
                 ?? throw new InvalidOperationException("This mod version has no downloadable file.");
 
             // Backup current version
@@ -211,26 +247,34 @@ public sealed class ModManagerService
             if (!result.Success)
                 return (false, $"Failed to download: {result.ErrorMessage}");
 
-            // Delete old file
-            if (File.Exists(modPath)) File.Delete(modPath);
+            // Delete old file and its metadata
             var disabledPath = Path.Combine(Paths.InstanceMinecraft(instanceId), "mods", $".{mod.FileName}");
+            if (File.Exists(modPath)) File.Delete(modPath);
             if (File.Exists(disabledPath)) File.Delete(disabledPath);
+            DeleteMetadata(instanceId, mod.FileName);
 
             // Update metadata
             var project = await _modrinth.GetProjectAsync(mod.ProjectId);
             mod.FileName = file.Filename;
-            mod.VersionId = latest.Id;
-            mod.Version = latest.VersionNumber;
+            mod.VersionId = best.Id;
+            mod.Version = best.VersionNumber;
             mod.Title = project.Title;
             mod.Description = project.Description;
             mod.Authors = string.IsNullOrEmpty(project.Slug) ? new List<string>() : new List<string> { project.Slug! };
             mod.IconUrl = project.IconUrl;
             mod.Size = file.Size;
             mod.InstalledAt = DateTimeOffset.UtcNow;
+            mod.DeclaredDependencies = best.Dependencies.Select(d => new ModDependency
+            {
+                ProjectId = d.ProjectId,
+                DependencyType = d.DependencyType,
+                VersionId = d.VersionId,
+                VersionRange = d.VersionRange
+            }).ToList();
             WriteMetadata(instanceId, mod);
 
-            _log.Info($"Updated mod ''{mod.Title ?? mod.FileName}'' to version {latest.VersionNumber}");
-            return (true, $"Updated to {latest.VersionNumber}");
+            _log.Info($"Updated mod ''{mod.Title ?? mod.FileName}'' to version {best.VersionNumber}");
+            return (true, $"Updated to {best.VersionNumber}");
         }
         catch (Exception ex)
         {
@@ -238,26 +282,248 @@ public sealed class ModManagerService
         }
     }
 
-    /// <summary>Checks for updates for all mods in an instance.</summary>
-    public async Task<(int Updated, int Failed, int Skipped)> UpdateAllModsAsync(string instanceId, ModLoaderType loader, string gameVersion)
+    /// <summary>Checks which installed mods have a compatible update available, marking
+    /// only those that do not conflict with other installed mods.</summary>
+    public async Task<List<ModInfo>> CheckForUpdatesAsync(string instanceId, ModLoaderType loader, string gameVersion, CancellationToken ct = default)
     {
         var mods = ListMods(instanceId);
-        int updated = 0, failed = 0, skipped = 0;
-
-        foreach (var mod in mods)
-        {
-            if (string.IsNullOrEmpty(mod.ProjectId) || string.IsNullOrEmpty(mod.VersionId))
+        var cache = new Dictionary<string, List<ModrinthVersion>>();
+        using var gate = new SemaphoreSlim(8);
+        var tasks = mods
+            .Where(m => !string.IsNullOrEmpty(m.ProjectId) && !string.IsNullOrEmpty(m.VersionId))
+            .Select(async mod =>
             {
-                skipped++;
+                await gate.WaitAsync();
+                try
+                {
+                    var (best, _) = await FindBestCompatibleVersionAsync(instanceId, mod, mods, loader, gameVersion, cache, ct);
+                    var has = best is not null && best.Id != mod.VersionId;
+                    mod.HasUpdate = has;
+                    mod.LatestVersionNumber = has ? best!.VersionNumber : null;
+                    mod.LatestVersionId = has ? best!.Id : null;
+                }
+                catch { /* skip mods whose metadata cannot be resolved */ }
+                finally { gate.Release(); }
+            })
+            .ToList();
+
+        await Task.WhenAll(tasks);
+        return mods;
+    }
+
+    /// <summary>Replaces an installed mod with a different version (downgrade or
+    /// upgrade) from Modrinth. The old jar and its metadata are removed.</summary>
+    public async Task<(bool Success, string Message)> ChangeVersionAsync(
+        string instanceId, ModInfo mod, ModrinthVersion version,
+        ModLoaderType loader, string gameVersion, IProgress<DownloadProgress>? progress = null)
+    {
+        try
+        {
+            var file = version.Files.FirstOrDefault()
+                ?? throw new InvalidOperationException("This mod version has no downloadable file.");
+
+            if (version.Id == mod.VersionId && string.Equals(file.Filename, mod.FileName, StringComparison.OrdinalIgnoreCase))
+                return (false, "That version is already installed.");
+
+            // Backup current version before replacing.
+            var backupDir = Path.Combine(Paths.InstanceFolder(instanceId), "mods", "backups");
+            Directory.CreateDirectory(backupDir);
+            var modDir = Path.Combine(Paths.InstanceMinecraft(instanceId), "mods");
+            var currentPath = Path.Combine(modDir, mod.FileName);
+            if (File.Exists(currentPath))
+                File.Copy(currentPath, Path.Combine(backupDir, mod.FileName), overwrite: true);
+
+            var (newMod, dependencies) = await InstallVersionAsync(instanceId, mod.ProjectId!, version, loader, gameVersion, progress);
+
+            // Remove the old jar and its metadata so only the new version remains.
+            if (!string.Equals(newMod.FileName, mod.FileName, StringComparison.OrdinalIgnoreCase))
+            {
+                if (File.Exists(currentPath)) File.Delete(currentPath);
+                var oldDisabled = Path.Combine(modDir, $".{mod.FileName}");
+                if (File.Exists(oldDisabled)) File.Delete(oldDisabled);
+                DeleteMetadata(instanceId, mod.FileName);
+            }
+
+            _log.Info($"Changed ''{mod.Title ?? mod.FileName}'' to version {version.VersionNumber}");
+            return (true, $"Changed to {version.VersionNumber}" + (dependencies.Count > 0 ? $" + {dependencies.Count} dependencies." : "."));
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    /// <summary>Selects the newest version of a mod that is compatible with every other
+    /// installed mod, checking both the candidate's own constraints and any constraints
+    /// other installed mods declare on this project.</summary>
+    private async Task<(ModrinthVersion? Best, string? Reason)> FindBestCompatibleVersionAsync(
+        string instanceId, ModInfo mod, IReadOnlyList<ModInfo> installed,
+        ModLoaderType loader, string gameVersion, Dictionary<string, List<ModrinthVersion>> cache,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(mod.ProjectId)) return (null, "Mod has no project ID.");
+
+        var versions = await GetVersionsCachedAsync(cache, mod.ProjectId, loader, gameVersion, ct);
+        if (versions.Count == 0) return (null, "No compatible versions found.");
+
+        var others = installed.Where(m => m.ProjectId != mod.ProjectId).ToList();
+
+        // Resolve each other installed mod's current-version dependencies once so
+        // reverse constraints (e.g. Iris requiring a specific Sodium) can be checked.
+        var otherConstraints = new Dictionary<string, List<ModrinthDependency>>();
+        foreach (var other in others)
+        {
+            if (string.IsNullOrEmpty(other.ProjectId) || string.IsNullOrEmpty(other.VersionId)) continue;
+            var otherVersions = await GetVersionsCachedAsync(cache, other.ProjectId, loader, gameVersion, ct);
+            var current = otherVersions.FirstOrDefault(v => v.Id == other.VersionId);
+            if (current is not null) otherConstraints[other.ProjectId] = current.Dependencies;
+        }
+
+        var currentVersion = versions.FirstOrDefault(v => v.Id == mod.VersionId);
+        string? lastReason = null;
+        foreach (var candidate in versions)
+        {
+            if (candidate.Id == mod.VersionId) continue;
+
+            // Only consider candidates newer than the installed version.
+            if (currentVersion is not null)
+            {
+                if (candidate.DatePublished <= currentVersion.DatePublished) break;
+            }
+            else if (string.IsNullOrEmpty(candidate.VersionNumber) || string.IsNullOrEmpty(mod.Version)
+                     || ModrinthVersionConstraint.Compare(candidate.VersionNumber, mod.Version) <= 0)
+            {
                 continue;
             }
 
-            var (success, _) = await UpdateModAsync(instanceId, mod, loader, gameVersion);
-            if (success) updated++;
-            else failed++;
+            var reason = FindConflict(candidate, mod.ProjectId, others, otherConstraints);
+            if (reason is null) return (candidate, null);
+            lastReason = reason;
+        }
+        return (null, lastReason ?? "No compatible versions found.");
+    }
+
+    /// <summary>Returns a human-readable reason when the candidate conflicts with an
+    /// installed mod, otherwise null.</summary>
+    private static string? FindConflict(
+        ModrinthVersion candidate, string projectId, IReadOnlyList<ModInfo> others,
+        IReadOnlyDictionary<string, List<ModrinthDependency>> otherConstraints)
+    {
+        // 1. Constraints the candidate itself declares on other installed mods.
+        foreach (var dep in candidate.Dependencies)
+        {
+            if (string.IsNullOrEmpty(dep.ProjectId)) continue;
+            var other = others.FirstOrDefault(o => o.ProjectId == dep.ProjectId);
+            if (other is null) continue;
+
+            if (dep.DependencyType is "incompatible" or "conflicts")
+            {
+                if (ConstraintHitsInstalled(dep, other))
+                    return $"{other.Title ?? other.FileName} ({other.Version})";
+            }
+            else if (dep.DependencyType == "required")
+            {
+                if (!ConstraintHitsInstalled(dep, other))
+                    return $"{other.Title ?? other.FileName} ({other.Version})";
+            }
         }
 
-        return (updated, failed, skipped);
+        // 2. Constraints other installed mods declare on this project.
+        foreach (var other in others)
+        {
+            if (other.ProjectId is null || !otherConstraints.TryGetValue(other.ProjectId, out var deps)) continue;
+            foreach (var dep in deps)
+            {
+                if (string.IsNullOrEmpty(dep.ProjectId) || dep.ProjectId != projectId) continue;
+
+                if (dep.DependencyType is "incompatible" or "conflicts")
+                {
+                    if (ConstraintHitsCandidate(dep, candidate))
+                        return $"{other.Title ?? other.FileName} ({other.Version})";
+                }
+                else if (dep.DependencyType == "required")
+                {
+                    if (!ConstraintHitsCandidate(dep, candidate))
+                        return $"{other.Title ?? other.FileName} ({other.Version})";
+                }
+            }
+        }
+        return null;
+    }
+
+    /// <summary>True when the constraint targets the installed mod's version.</summary>
+    private static bool ConstraintHitsInstalled(ModrinthDependency dep, ModInfo installed)
+    {
+        if (!string.IsNullOrEmpty(dep.VersionId)) return dep.VersionId == installed.VersionId;
+        if (!string.IsNullOrEmpty(dep.VersionRange)) return ModrinthVersionConstraint.RangeMatches(dep.VersionRange, installed.Version);
+        return true;
+    }
+
+    /// <summary>True when the constraint targets the candidate version.</summary>
+    private static bool ConstraintHitsCandidate(ModrinthDependency dep, ModrinthVersion candidate)
+    {
+        if (!string.IsNullOrEmpty(dep.VersionId)) return dep.VersionId == candidate.Id;
+        if (!string.IsNullOrEmpty(dep.VersionRange)) return ModrinthVersionConstraint.RangeMatches(dep.VersionRange, candidate.VersionNumber ?? candidate.Name);
+        return true;
+    }
+
+    private async Task<List<ModrinthVersion>> GetVersionsCachedAsync(
+        Dictionary<string, List<ModrinthVersion>> cache, string projectId,
+        ModLoaderType loader, string gameVersion, CancellationToken ct = default)
+    {
+        if (cache.TryGetValue(projectId, out var cached)) return cached;
+        var versions = await _modrinth.GetVersionsAsync(projectId, loader, gameVersion, ct);
+        cache[projectId] = versions;
+        return versions;
+    }
+
+    /// <summary>Precomputed set of constraints installed mods impose, so many candidate
+    /// versions can be evaluated for conflicts without repeated network calls.</summary>
+    public sealed class CompatibilitySnapshot
+    {
+        internal CompatibilitySnapshot(
+            IReadOnlyList<ModInfo> others,
+            IReadOnlyDictionary<string, List<ModrinthDependency>> constraints)
+        {
+            Others = others;
+            Constraints = constraints;
+        }
+
+        /// <summary>Installed mods other than the project being evaluated.</summary>
+        public IReadOnlyList<ModInfo> Others { get; }
+
+        /// <summary>Current version's dependencies per installed project id.</summary>
+        public IReadOnlyDictionary<string, List<ModrinthDependency>> Constraints { get; }
+    }
+
+    /// <summary>Builds a snapshot of installed-mod constraints for a project so many
+    /// candidate versions can be checked with a single round of network calls.</summary>
+    public async Task<CompatibilitySnapshot> BuildCompatibilitySnapshotAsync(
+        string instanceId, string projectId, ModLoaderType loader, string gameVersion)
+    {
+        var installed = ListMods(instanceId);
+        var others = installed.Where(m => m.ProjectId != projectId).ToList();
+        var cache = new Dictionary<string, List<ModrinthVersion>>();
+        var otherConstraints = new Dictionary<string, List<ModrinthDependency>>();
+        foreach (var other in others)
+        {
+            if (string.IsNullOrEmpty(other.ProjectId) || string.IsNullOrEmpty(other.VersionId)) continue;
+            var versions = await GetVersionsCachedAsync(cache, other.ProjectId, loader, gameVersion);
+            var current = versions.FirstOrDefault(v => v.Id == other.VersionId);
+            if (current is not null) otherConstraints[other.ProjectId] = current.Dependencies;
+        }
+        return new CompatibilitySnapshot(others, otherConstraints);
+    }
+
+    /// <summary>Returns a human-readable conflict reason when installing the version
+    /// would clash with another installed mod, otherwise null.</summary>
+    public string? EvaluateVersion(CompatibilitySnapshot snapshot, string projectId, ModrinthVersion version)
+        => FindConflict(version, projectId, snapshot.Others, snapshot.Constraints);
+
+    private void DeleteMetadata(string instanceId, string fileName)
+    {
+        var metaPath = Path.Combine(Paths.InstanceFolder(instanceId), "mods", $"{Path.GetFileNameWithoutExtension(fileName)}.json");
+        if (File.Exists(metaPath)) File.Delete(metaPath);
     }
 
     /// <summary>Installs the latest compatible version of a mod from Modrinth (with
@@ -320,7 +586,14 @@ public sealed class ModManagerService
             Version = version.VersionNumber,
             Enabled = true,
             Size = file.Size,
-            InstalledAt = DateTimeOffset.UtcNow
+            InstalledAt = DateTimeOffset.UtcNow,
+            DeclaredDependencies = version.Dependencies.Select(d => new ModDependency
+            {
+                ProjectId = d.ProjectId,
+                DependencyType = d.DependencyType,
+                VersionId = d.VersionId,
+                VersionRange = d.VersionRange
+            }).ToList()
         };
         WriteMetadata(instanceId, mod);
 
@@ -330,7 +603,7 @@ public sealed class ModManagerService
         {
             try
             {
-                var (depMod, depDeps) = await InstallLatestFromModrinthAsync(instanceId, dep.ProjectId!, loader, gameVersion, null, ct);
+                var (depMod, depDeps) = await InstallDependencyAsync(instanceId, dep, loader, gameVersion, ct);
                 dependencies.Add(depMod);
                 dependencies.AddRange(depDeps);
             }
@@ -342,6 +615,19 @@ public sealed class ModManagerService
 
         _log.Info($"Installed mod ''{file.Filename}'' into ''{instanceId}''");
         return (mod, dependencies);
+    }
+
+    /// <summary>Installs a required dependency, preferring the exact version pinned by
+    /// the parent mod (e.g. Iris pinning a specific Sodium) and falling back to the
+    /// latest compatible version when no exact pin exists.</summary>
+    private async Task<(ModInfo Mod, List<ModInfo> Deps)> InstallDependencyAsync(
+        string instanceId, ModrinthDependency dep, ModLoaderType loader, string gameVersion, CancellationToken ct)
+    {
+        var versions = await _modrinth.GetVersionsAsync(dep.ProjectId!, loader, gameVersion, ct);
+        var target = versions.FirstOrDefault(v => v.Id == dep.VersionId) ?? versions.FirstOrDefault();
+        if (target is null)
+            throw new InvalidOperationException($"No compatible version of dependency ''{dep.ProjectId}'' for Minecraft {gameVersion}.");
+        return await InstallVersionAsync(instanceId, dep.ProjectId!, target, loader, gameVersion, null, ct);
     }
 
     /// <summary>Imports mods from a ZIP archive into an instance.</summary>

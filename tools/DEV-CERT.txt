@@ -1,0 +1,33 @@
+FoxLauncher dev code-signing certificate
+=======================================
+
+This is a self-signed code-signing certificate stored in the current
+user's Windows certificate store. It produces a valid Authenticode
+signature with a DigiCert RFC 3161 timestamp, but is NOT chained to a
+trusted root — Windows will still show "Unknown publisher" on first
+run. Use it for local dev builds.
+
+Certificate:
+  Subject   : CN=FoxLauncher Dev, O=FoxLauncher, C=US
+  Thumbprint: DCA02878826FE79947D04BDC3A5601E3D1683A61
+  NotAfter  : 2029-08-07
+  Store     : Cert:\CurrentUser\My
+
+For official user-facing releases, use the SignPath.io pipeline in
+.github/workflows/build.yml (which runs build.ps1 -LauncherOnly with
+a real EV-backed code-signing certificate).
+
+Signing the latest build artifacts:
+
+  # Option A — environment variable
+  $env:FOXLAUNCHER_CERT_THUMBPRINT = "DCA02878826FE79947D04BDC3A5601E3D1683A61"
+  .\sign.ps1
+
+  # Option B — flag
+  .\sign.ps1 -Thumbprint DCA02878826FE79947D04BDC3A5601E3D1683A61
+
+To re-export the .pfx backup (currently in tools\foxlauncher-dev.pfx):
+
+  $cert = Get-ChildItem Cert:\CurrentUser\My\DCA02878826FE79947D04BDC3A5601E3D1683A61
+  $password = ConvertTo-SecureString -String 'foxlauncher-dev-2026' -Force -AsPlainText
+  Export-PfxCertificate -Cert $cert -FilePath .\tools\foxlauncher-dev.pfx -Password $password

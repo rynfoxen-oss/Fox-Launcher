@@ -12,7 +12,8 @@
         Width="1180" Height="760" MinWidth="920" MinHeight="580"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource WindowBackground}"
-        WindowStyle="None" ResizeMode="CanResize">
+        WindowStyle="None" ResizeMode="CanResize"
+        UseLayoutRounding="True">
 
     <Window.Resources>
         <conv:NullToVisibilityConverter x:Key="NullToVisibility"/>
@@ -80,9 +81,12 @@
                        VerticalAlignment="Center" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"
                        Margin="40,0"/>
             <StackPanel Grid.Column="2" Orientation="Horizontal">
-                <Button Style="{StaticResource IconButton}" Content="&#xE921;" ToolTip="Minimize" Click="OnMinimizeClick"/>
-                <Button Style="{StaticResource IconButton}" Content="&#xE922;" ToolTip="Maximize" Click="OnMaximizeClick"/>
-                <Button Style="{StaticResource IconButton}" Content="&#xE8BB;" ToolTip="Close" Click="OnCloseClick"/>
+                <Button Style="{StaticResource IconButton}" Content="&#xE921;" ToolTip="Minimize"
+                        AutomationProperties.Name="Minimize" Click="OnMinimizeClick"/>
+                <Button x:Name="MaximizeButton" Style="{StaticResource IconButton}" Content="&#xE922;" ToolTip="Maximize"
+                        AutomationProperties.Name="Maximize" Click="OnMaximizeClick"/>
+                <Button Style="{StaticResource WindowCloseButton}" Content="&#xE8BB;" ToolTip="Close"
+                        AutomationProperties.Name="Close" Click="OnCloseClick"/>
             </StackPanel>
         </Grid>
 
@@ -173,13 +177,14 @@
             <!-- Content -->
             <Grid Grid.Column="2" Background="{DynamicResource WindowBackground}">
                 <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="20" Padding="18" Margin="18"
-                        Effect="{DynamicResource CardShadow}">
-                    <ContentControl Content="{Binding CurrentPage}"/>
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                    <ContentControl x:Name="PageHost" Content="{Binding CurrentPage}"/>
                 </Border>
                 <Button Style="{StaticResource IconButton}" Content="&#xE700;" Command="{Binding ToggleSidebarCommand}"
                         ToolTip="Expand sidebar" HorizontalAlignment="Left" VerticalAlignment="Top"
                         Margin="8" Padding="10,8" Background="{DynamicResource TitleBarBackground}"
                         BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                        AutomationProperties.Name="Expand sidebar"
                         Visibility="{Binding IsSidebarCollapsed, Converter={StaticResource BoolToVisibility}}"/>
             </Grid>
         </Grid>

@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Launcher.Models\Launcher.Models.csproj" />
+    <ProjectReference Include="..\Launcher.Skin\Launcher.Skin.csproj" />
     <ProjectReference Include="..\Launcher.Utils\Launcher.Utils.csproj" />
     <ProjectReference Include="..\Launcher.ViewModels\Launcher.ViewModels.csproj" />
   </ItemGroup>

@@ -23,6 +23,10 @@
     <SolidColorBrush x:Key="AccentDarkBrush" Color="#FF5E2B16"/>
     <SolidColorBrush x:Key="AccentGlowBrush" Color="#66FF8B3D"/>
 
+    <!-- Focus ring -->
+    <SolidColorBrush x:Key="FocusRingBrush" Color="#FFFF8B3D"/>
+    <SolidColorBrush x:Key="FocusRingFillBrush" Color="#26FF8B3D"/>
+
     <!-- Semantic -->
     <SolidColorBrush x:Key="DangerBrush" Color="#FFE0554E"/>
     <SolidColorBrush x:Key="DangerLightBrush" Color="#FFE97770"/>
@@ -44,8 +48,9 @@
     <CornerRadius x:Key="ButtonRadius">8</CornerRadius>
     <CornerRadius x:Key="InputRadius">8</CornerRadius>
 
-    <!-- Drop shadow for cards -->
-    <DropShadowEffect x:Key="CardShadow" Color="#000000" BlurRadius="24" ShadowDepth="6" Opacity="0.35"/>
+    <!-- Drop shadow for cards (soft; heavy blur radius forces content to an
+         offscreen bitmap and makes text look blurry, so keep it subtle) -->
+    <DropShadowEffect x:Key="CardShadow" Color="#000000" BlurRadius="14" ShadowDepth="3" Opacity="0.24"/>
 
     <!-- Blur brush used on floating panels -->
     <BlurEffect x:Key="PanelBlur" Radius="24" RenderingBias="Performance"/>

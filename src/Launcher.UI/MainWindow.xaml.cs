@@ -22,6 +22,7 @@ public partial class MainWindow : Window
         _vm = hub.Container.Resolve<MainViewModel>();
         DataContext = _vm;
         _vm.PropertyChanged += OnVmPropertyChanged;
+        StateChanged += OnWindowStateChanged;
 
         Loaded += (_, _) =>
         {
@@ -29,6 +30,14 @@ public partial class MainWindow : Window
             SyncNavSelection();
             ClampToWorkArea();
         };
+    }
+
+    private void OnWindowStateChanged(object? sender, EventArgs e)
+    {
+        // Swap the chrome glyph between maximize/restore as the state changes.
+        var maximized = WindowState == WindowState.Maximized;
+        MaximizeButton.Content = maximized ? "\uE923" : "\uE922";
+        ToolTipService.SetToolTip(MaximizeButton, maximized ? "Restore" : "Maximize");
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -165,8 +174,16 @@ public partial class MainWindow : Window
 
     private void ApplySidebar()
     {
-        var width = _vm.IsSidebarCollapsed ? 0d : 220d;
-        SidebarColumn.Width = new GridLength(width);
+        var target = _vm.IsSidebarCollapsed ? 0d : 220d;
+        if (Math.Abs(SidebarColumn.Width.Value - target) < 0.5) return;
+
+        var animation = new GridLengthAnimation
+        {
+            From = new GridLength(SidebarColumn.Width.Value),
+            To = new GridLength(target),
+            Duration = TimeSpan.FromMilliseconds(180)
+        };
+        SidebarColumn.BeginAnimation(ColumnDefinition.WidthProperty, animation);
     }
 
     private void SyncNavSelection()

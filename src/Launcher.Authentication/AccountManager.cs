@@ -145,6 +145,7 @@ public sealed class AccountManager
                 CreatedAt = a.CreatedAt,
                 LastUsedAt = a.LastUsedAt,
                 SkinUrl = a.SkinUrl,
+                SkinVariant = a.SkinVariant,
                 UsernameHistory = a.UsernameHistory.ToList()
             }).ToList()
         };

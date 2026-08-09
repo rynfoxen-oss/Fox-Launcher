@@ -96,6 +96,10 @@ public sealed class ModInfo : INotifyPropertyChanged
     /// <summary>Declared incompatible mod IDs.</summary>
     public List<string> IncompatibleMods { get; set; } = new();
 
+    /// <summary>Dependency constraints declared by the installed version on Modrinth
+    /// (used to detect conflicts before updating/installing other mods).</summary>
+    public List<ModDependency> DeclaredDependencies { get; set; } = new();
+
     /// <summary>True when an update is available on Modrinth.</summary>
     public bool HasUpdate
     {

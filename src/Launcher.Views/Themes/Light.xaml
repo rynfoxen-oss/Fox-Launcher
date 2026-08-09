@@ -20,6 +20,6 @@
 
     <SolidColorBrush x:Key="BackgroundOverlayBrush" Color="#33FFFFFF"/>
 
-    <DropShadowEffect x:Key="CardShadow" Color="#4D000000" BlurRadius="18" ShadowDepth="3" Opacity="0.18"/>
+    <DropShadowEffect x:Key="CardShadow" Color="#3D000000" BlurRadius="12" ShadowDepth="2" Opacity="0.14"/>
 
 </ResourceDictionary>

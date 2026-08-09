@@ -52,7 +52,7 @@ public static class Paths
             }
         }
 
-        foreach (var dir in new[] { Root, Versions, Libraries, Assets, Instances, ModsCache, ShadersCache, Logs, Backups, Temp, Java, Config, Skins })
+        foreach (var dir in new[] { Root, Versions, Libraries, Assets, Instances, ModsCache, ShadersCache, Logs, Backups, Temp, Java, Config, Skins, SkinPreviewCache })
         {
             Directory.CreateDirectory(dir);
         }
@@ -102,6 +102,9 @@ public static class Paths
 
     /// <summary>Local skin textures for offline accounts.</summary>
     public static string Skins => Path.Combine(Config, "skins");
+
+    /// <summary>Disk cache for downloaded skin textures shown in the preview.</summary>
+    public static string SkinPreviewCache => Path.Combine(Config, "skin-preview-cache");
 
     /// <summary>Settings file.</summary>
     public static string SettingsFile => Path.Combine(Config, "settings.json");

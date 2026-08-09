@@ -19,6 +19,7 @@ public sealed class AccountsViewModel : ViewModelBase
     private string _offlineName = "";
     private string _status = "";
     private string _activeSkinUrl = "";
+    private string _activeSkinVariant = "";
     private bool _isSlimVariant;
     private bool _isSkinBusy;
 
@@ -110,6 +111,60 @@ public sealed class AccountsViewModel : ViewModelBase
     {
         get => _isSlimVariant;
         set => SetProperty(ref _isSlimVariant, value);
+    }
+
+    /// <summary>Model variant declared by the active account ("CLASSIC"/"SLIM"/"").</summary>
+    public string ActiveSkinVariant
+    {
+        get => _activeSkinVariant;
+        private set => SetProperty(ref _activeSkinVariant, value);
+    }
+
+    /// <summary>Whether the 3D skin preview is enabled (persisted in settings).</summary>
+    public bool SkinPreview3D
+    {
+        get => Services.Settings.SkinPreview3D;
+        set { Services.Settings.SkinPreview3D = value; OnPropertyChanged(); }
+    }
+
+    /// <summary>Preview model preference: "Auto", "Classic" or "Slim" (persisted).</summary>
+    public string SkinModelPreference
+    {
+        get => Services.Settings.SkinModelPreference;
+        set
+        {
+            Services.Settings.SkinModelPreference = value;
+            IsSlimVariant = value == "Slim";
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsModelAuto));
+            OnPropertyChanged(nameof(IsModelClassic));
+            OnPropertyChanged(nameof(IsModelSlim));
+        }
+    }
+
+    /// <summary>Whether the preview idle animation runs (persisted).</summary>
+    public bool SkinAnimation
+    {
+        get => Services.Settings.SkinAnimation;
+        set { Services.Settings.SkinAnimation = value; OnPropertyChanged(); }
+    }
+
+    public bool IsModelAuto
+    {
+        get => SkinModelPreference == "Auto";
+        set { if (value) SkinModelPreference = "Auto"; }
+    }
+
+    public bool IsModelClassic
+    {
+        get => SkinModelPreference == "Classic";
+        set { if (value) SkinModelPreference = "Classic"; }
+    }
+
+    public bool IsModelSlim
+    {
+        get => SkinModelPreference == "Slim";
+        set { if (value) SkinModelPreference = "Slim"; }
     }
 
     public bool IsSkinBusy
@@ -211,8 +266,10 @@ public sealed class AccountsViewModel : ViewModelBase
                 else
                 {
                     account.SkinUrl = url;
+                    account.SkinVariant = variant;
                     Services.Accounts.SaveAccount(account);
                     ActiveSkinUrl = url;
+                    ActiveSkinVariant = variant;
                     Status = "Skin updated. It will appear in-game.";
                 }
             }
@@ -223,6 +280,7 @@ public sealed class AccountsViewModel : ViewModelBase
                 File.Copy(path, dest, overwrite: true);
 
                 account.SkinUrl = new Uri(dest).AbsoluteUri;
+                account.SkinVariant = IsSlimVariant ? "SLIM" : "CLASSIC";
                 Services.Accounts.SaveAccount(account);
                 ActiveSkinUrl = account.SkinUrl;
                 Status = "Skin saved for this offline profile. It is shown in the launcher; play it on a Fabric instance to see it in-game.";
@@ -256,8 +314,10 @@ public sealed class AccountsViewModel : ViewModelBase
                 Status = "Resetting skin...";
                 await Services.MicrosoftAuth.ResetSkinAsync(account.AccessToken);
                 account.SkinUrl = "";
+                account.SkinVariant = "";
                 Services.Accounts.SaveAccount(account);
                 ActiveSkinUrl = "";
+                ActiveSkinVariant = "";
                 Status = "Skin reset to the default.";
             }
             else if (account.Type == AccountType.Offline)
@@ -265,8 +325,10 @@ public sealed class AccountsViewModel : ViewModelBase
                 var dest = Paths.LocalSkinFile(account.Uuid);
                 if (File.Exists(dest)) File.Delete(dest);
                 account.SkinUrl = "";
+                account.SkinVariant = "";
                 Services.Accounts.SaveAccount(account);
                 ActiveSkinUrl = "";
+                ActiveSkinVariant = "";
                 Status = "Skin reset to the default.";
             }
             else
@@ -290,6 +352,7 @@ public sealed class AccountsViewModel : ViewModelBase
         Accounts = Services.Accounts.Accounts;
         Active = Services.Accounts.Active;
         ActiveSkinUrl = Active?.SkinUrl ?? "";
+        ActiveSkinVariant = Active?.SkinVariant ?? "";
         OnPropertyChanged(nameof(HasActiveAccount));
     }
 

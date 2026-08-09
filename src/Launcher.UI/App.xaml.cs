@@ -353,11 +353,17 @@ public partial class App : Application
             var dialog = new RenameDialog(title, initial) { Owner = MainWindow };
             return dialog.ShowDialog() == true ? dialog.Value : null;
         };
-        hub.OpenModInstaller = instance =>
+        hub.OpenModInstaller = (instance, kind) =>
         {
-            var dialog = new ModInstallerWindow(hub, instance) { Owner = MainWindow };
+            var dialog = new ModInstallerWindow(hub, instance, kind) { Owner = MainWindow };
             dialog.ShowDialog();
             return dialog.InstalledAny;
+        };
+        hub.OpenModVersionPicker = (instance, mod) =>
+        {
+            var dialog = new ChangeVersionWindow(hub, instance, mod) { Owner = MainWindow };
+            dialog.ShowDialog();
+            return dialog.ChangedAny;
         };
         hub.OpenUpdateDialog = info =>
         {
@@ -453,6 +459,7 @@ public partial class App : Application
                     {
                         "light" => "pack://application:,,,/Launcher.Views;component/Themes/Light.xaml",
                         "midnight" => "pack://application:,,,/Launcher.Views;component/Themes/Midnight.xaml",
+                        "highcontrast" => "pack://application:,,,/Launcher.Views;component/Themes/HighContrast.xaml",
                         _ => "pack://application:,,,/Launcher.Views;component/Themes/Colors.xaml"
                     },
                     UriKind.Absolute)

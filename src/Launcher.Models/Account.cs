@@ -45,6 +45,10 @@ public sealed class Account
     /// <summary>Public URL of the player skin used for the avatar (may be empty).</summary>
     public string SkinUrl { get; set; } = "";
 
+    /// <summary>Player model variant declared by the account: "CLASSIC", "SLIM"
+    /// or empty when unknown. Used for automatic preview model detection.</summary>
+    public string SkinVariant { get; set; } = "";
+
     /// <summary>History of usernames the account has used (oldest first).</summary>
     public List<string> UsernameHistory { get; set; } = new();
 

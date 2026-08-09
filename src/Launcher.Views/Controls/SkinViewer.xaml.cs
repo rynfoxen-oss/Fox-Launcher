@@ -1,22 +1,70 @@
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Media.Media3D;
+using Launcher.Skin;
 
 namespace Launcher.Views.Controls;
 
-/// <summary>Renders a Minecraft skin figure (head cube + body) from a skin texture PNG.</summary>
+/// <summary>
+/// Interactive 3D Minecraft skin figure rendered with WPF's built-in
+/// <see cref="Viewport3D"/>. Drag to orbit, scroll to zoom. The model uses the
+/// exact proportions and official UV layout of the game, with classic and slim
+/// arm variants. An idle animation and gentle auto-spin can be toggled.
+/// </summary>
 public partial class SkinViewer : UserControl
 {
     public SkinViewer()
     {
         InitializeComponent();
-        Loaded += (_, _) => Refresh();
-        Unloaded += (_, _) => Unlock();
+        Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
+        SizeChanged += (_, _) => UpdateFraming();
+
+        Viewport.MouseLeftButtonDown += (_, e) =>
+        {
+            // Double-click resets the camera framing.
+            if (e.Timestamp - _lastClickTime < 500)
+                ResetView();
+            _lastClickTime = e.Timestamp;
+            Viewport.CaptureMouse();
+            _dragging = true;
+            _lastDrag = e.GetPosition(Viewport);
+        };
+        Viewport.MouseMove += (_, e) =>
+        {
+            if (!_dragging) return;
+            var p = e.GetPosition(Viewport);
+            _yaw += (p.X - _lastDrag.X) * 0.008;
+            _pitch = Math.Clamp(_pitch + (p.Y - _lastDrag.Y) * 0.008, -1.2, 0.8);
+            _lastDrag = p;
+            ApplyCamera();
+        };
+        Viewport.MouseLeftButtonUp += (_, _) =>
+        {
+            Viewport.ReleaseMouseCapture();
+            _dragging = false;
+        };
+        Viewport.MouseWheel += (_, e) =>
+        {
+            _distance = Math.Clamp(_distance * (e.Delta > 0 ? 0.92 : 1.08), _minDistance, _maxDistance);
+            ApplyCamera();
+        };
     }
 
-    /// <summary>Default skin (MHF_Steve) bundled as a project resource so the preview
+    private void ResetView()
+    {
+        _yaw = 0.785;
+        _pitch = -0.12;
+        _distance = _framingDistance;
+        ApplyCamera();
+    }
+
+    /// <summary>Default skin (Steve) bundled as a project resource so the preview
     /// works even without an internet connection.</summary>
     private const string DefaultSkinResource = "pack://application:,,,/Launcher.Views;component/Assets/skins/default_steve.png";
 
@@ -32,7 +80,7 @@ public partial class SkinViewer : UserControl
 
     public static readonly DependencyProperty ShowBodyProperty =
         DependencyProperty.Register(nameof(ShowBody), typeof(bool), typeof(SkinViewer),
-            new PropertyMetadata(false, (d, _) => ((SkinViewer)d).Refresh()));
+            new PropertyMetadata(true, (d, _) => ((SkinViewer)d).RenderChanged()));
 
     public bool ShowBody
     {
@@ -40,9 +88,11 @@ public partial class SkinViewer : UserControl
         set => SetValue(ShowBodyProperty, value);
     }
 
+    /// <summary>Approximate pixel width of the head. Kept for API compatibility;
+    /// the 3D view scales to the available space instead.</summary>
     public static readonly DependencyProperty HeadWidthProperty =
         DependencyProperty.Register(nameof(HeadWidth), typeof(double), typeof(SkinViewer),
-            new PropertyMetadata(96.0, (d, _) => ((SkinViewer)d).Refresh()));
+            new PropertyMetadata(96.0));
 
     public double HeadWidth
     {
@@ -50,60 +100,356 @@ public partial class SkinViewer : UserControl
         set => SetValue(HeadWidthProperty, value);
     }
 
-    private BitmapSource? _bmp;
-    private object _lock = new();
+    /// <summary>"Auto", "Classic" or "Slim" (Auto uses the account variant, then
+    /// falls back to pixel detection).</summary>
+    public static readonly DependencyProperty ModelPreferenceProperty =
+        DependencyProperty.Register(nameof(ModelPreference), typeof(string), typeof(SkinViewer),
+            new PropertyMetadata("Auto", (d, _) => ((SkinViewer)d).RenderChanged()));
+
+    public string ModelPreference
+    {
+        get => (string)GetValue(ModelPreferenceProperty);
+        set => SetValue(ModelPreferenceProperty, value);
+    }
+
+    /// <summary>Variant declared by the account: "CLASSIC", "SLIM" or empty.</summary>
+    public static readonly DependencyProperty SkinVariantProperty =
+        DependencyProperty.Register(nameof(SkinVariant), typeof(string), typeof(SkinViewer),
+            new PropertyMetadata("", (d, _) => ((SkinViewer)d).RenderChanged()));
+
+    public string SkinVariant
+    {
+        get => (string)GetValue(SkinVariantProperty);
+        set => SetValue(SkinVariantProperty, value);
+    }
+
+    /// <summary>Whether the idle animation runs.</summary>
+    public static readonly DependencyProperty AnimationEnabledProperty =
+        DependencyProperty.Register(nameof(AnimationEnabled), typeof(bool), typeof(SkinViewer),
+            new PropertyMetadata(true, (d, _) => ((SkinViewer)d).AnimationChanged()));
+
+    public bool AnimationEnabled
+    {
+        get => (bool)GetValue(AnimationEnabledProperty);
+        set => SetValue(AnimationEnabledProperty, value);
+    }
+
+    /// <summary>Whether the figure slowly auto-spins.</summary>
+    public static readonly DependencyProperty AutoRotateProperty =
+        DependencyProperty.Register(nameof(AutoRotate), typeof(bool), typeof(SkinViewer),
+            new PropertyMetadata(false, (d, _) => ((SkinViewer)d).AnimationChanged()));
+
+    public bool AutoRotate
+    {
+        get => (bool)GetValue(AutoRotateProperty);
+        set => SetValue(AutoRotateProperty, value);
+    }
+
+    /// <summary>"Low", "Medium" or "High". Low disables antialiased edges.</summary>
+    public static readonly DependencyProperty RenderQualityProperty =
+        DependencyProperty.Register(nameof(RenderQuality), typeof(string), typeof(SkinViewer),
+            new PropertyMetadata("Medium", (d, _) => ((SkinViewer)d).RenderChanged()));
+
+    public string RenderQuality
+    {
+        get => (string)GetValue(RenderQualityProperty);
+        set => SetValue(RenderQualityProperty, value);
+    }
+
+    private CancellationTokenSource? _loadCts;
+    private SkinCache? _cache;
+
+    // Built once per texture and reused every frame.
+    private sealed class PartRig
+    {
+        public required Model3DGroup Group { get; init; }
+        public required SkinPart Part { get; init; }
+        public required Vector3D Pivot { get; init; }
+        public required AxisAngleRotation3D Yaw { get; init; }
+        public required AxisAngleRotation3D Pitch { get; init; }
+    }
+
+    private Model3DGroup? _rootGroup;
+    private readonly List<PartRig> _rig = new();
+    private readonly AxisAngleRotation3D _rootYaw = new(new Vector3D(0, 1, 0), 0);
+    private readonly TranslateTransform3D _rootBob = new();
+    private readonly Transform3DGroup _rootTransform = new();
+
+    private Stopwatch? _clock;
+    private bool _animating;
+    private bool _dragging;
+    private bool _framedOnce;
+    private int _lastClickTime;
+
+    private double _yaw = 0.785;
+    private double _pitch = -0.12;
+    private double _distance;
+    private double _framingDistance;
+    private double _minDistance;
+    private double _maxDistance;
+    private Point _lastDrag;
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        _clock = Stopwatch.StartNew();
+        AnimationChanged();
+        Refresh();
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        StopAnimation();
+        _loadCts?.Cancel();
+    }
+
+    private void AnimationChanged()
+    {
+        if (AnimationEnabled || AutoRotate) StartAnimation();
+        else StopAnimation();
+    }
+
+    private void StartAnimation()
+    {
+        if (_animating || !IsLoaded) return;
+        _animating = true;
+        _clock ??= Stopwatch.StartNew();
+        CompositionTarget.Rendering += OnRendering;
+    }
+
+    private void StopAnimation()
+    {
+        if (!_animating) return;
+        _animating = false;
+        CompositionTarget.Rendering -= OnRendering;
+    }
+
+    private void OnRendering(object? sender, EventArgs e)
+    {
+        double t = _clock?.Elapsed.TotalSeconds ?? 0;
+        UpdatePose(t);
+    }
+
+    private void UpdatePose(double t)
+    {
+        bool anim = AnimationEnabled;
+
+        _rootYaw.Angle = AutoRotate ? (t * 18.0) % 360 : 0;
+        _rootBob.OffsetY = anim ? Math.Sin(t * 2.4) * 0.55 : 0;
+
+        double headYaw = anim ? Math.Sin(t * 0.9) * 8 : 0;
+        double headPitch = anim ? Math.Sin(t * 0.6) * 2.5 : 0;
+        double armSwing = anim ? Math.Sin(t * 1.9) * 3.5 : 0;
+
+        foreach (var rig in _rig)
+        {
+            switch (rig.Part)
+            {
+                case SkinPart.Head:
+                    rig.Yaw.Angle = headYaw;
+                    rig.Pitch.Angle = headPitch;
+                    break;
+                case SkinPart.RightArm:
+                    rig.Yaw.Angle = armSwing;
+                    rig.Pitch.Angle = 0;
+                    break;
+                case SkinPart.LeftArm:
+                    rig.Yaw.Angle = -armSwing;
+                    rig.Pitch.Angle = 0;
+                    break;
+                default:
+                    rig.Yaw.Angle = 0;
+                    rig.Pitch.Angle = 0;
+                    break;
+            }
+        }
+    }
+
+    private void RenderChanged()
+    {
+        if (!IsLoaded) return;
+        ApplyQuality();
+        UpdateFraming();
+        Refresh();
+    }
 
     private async void Refresh()
     {
         if (!IsLoaded) return;
-        Unlock();
         Busy.Visibility = Visibility.Visible;
+
+        _loadCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _loadCts = cts;
 
         var requested = TextureUrl;
         var url = string.IsNullOrWhiteSpace(requested) ? DefaultSkinResource : requested;
-        var bmp = await TryLoadAsync(url);
 
-        // A newer refresh started while we were loading (e.g. account switch) - drop the stale result.
+        var bytes = await LoadBytesAsync(url, cts.Token).ConfigureAwait(true);
+        if (cts.IsCancellationRequested || bytes is null) return;
+        var decoded = Decode(bytes);
+
+        bool isDefault = string.Equals(url, DefaultSkinResource, StringComparison.Ordinal);
+        if (decoded is null && !isDefault)
+        {
+            var fallback = await LoadBytesAsync(DefaultSkinResource, cts.Token).ConfigureAwait(true);
+            if (cts.IsCancellationRequested) return;
+            bytes = fallback;
+            decoded = fallback is null ? null : Decode(fallback);
+            isDefault = true;
+        }
+        if (cts.IsCancellationRequested || decoded is null) return;
+        // A newer refresh started while loading (e.g. account switch) - drop stale data.
         if (!string.Equals(TextureUrl, requested, StringComparison.Ordinal)) return;
 
-        // Fall back to the default skin when the configured texture fails to load.
-        if (bmp is null && !string.Equals(url, DefaultSkinResource, StringComparison.Ordinal))
+        var (tex, image) = decoded.Value;
+
+        SkinModelType type = ResolveType(tex);
+        if (isDefault && type == SkinModelType.Slim)
         {
-            bmp = await TryLoadAsync(DefaultSkinResource);
-            if (!string.Equals(TextureUrl, requested, StringComparison.Ordinal)) return;
+            // The bundled default is a classic Steve texture; crop it to a slim
+            // layout so "Slim / Auto on a slim account" shows a proper Alex body.
+            tex = tex.ToSlim();
+            image = ToImage(tex);
         }
 
-        if (bmp is null)
-        {
-            Busy.Visibility = Visibility.Collapsed;
-            return;
-        }
-
-        lock (_lock) _bmp = bmp;
-        Render();
+        BuildFigure(tex, type, image);
+        Busy.Visibility = Visibility.Collapsed;
     }
 
-    private static async Task<BitmapSource?> TryLoadAsync(string url)
+    private SkinModelType ResolveType(SkinTexture tex)
     {
-        try
+        switch (ModelPreference.Trim().ToLowerInvariant())
         {
-            var bytes = await LoadBytesAsync(url).ConfigureAwait(false);
-            return bytes is { Length: > 0 } ? Load(bytes) : null;
+            case "classic": return SkinModelType.Classic;
+            case "slim": return SkinModelType.Slim;
         }
-        catch
-        {
-            return null;
-        }
+        if (SkinVariant.Equals("SLIM", StringComparison.OrdinalIgnoreCase)) return SkinModelType.Slim;
+        if (SkinVariant.Equals("CLASSIC", StringComparison.OrdinalIgnoreCase)) return SkinModelType.Classic;
+        return ModelDetector.Detect(tex) ?? SkinModelType.Classic;
     }
 
-    /// <summary>Loads the texture from an embedded resource, a local file or an HTTP URL.</summary>
-    private static async Task<byte[]?> LoadBytesAsync(string textureUrl)
+    private void BuildFigure(SkinTexture tex, SkinModelType type, ImageSource image)
     {
-        if (Uri.TryCreate(textureUrl, UriKind.Absolute, out var uri))
+        IReadOnlyList<PartModel> parts = MinecraftPlayerModel.Build(type, tex.Width, tex.Height);
+
+        var brush = new ImageBrush(image)
+        {
+            Stretch = Stretch.Fill,
+            ViewboxUnits = BrushMappingMode.Absolute,
+            ViewportUnits = BrushMappingMode.Absolute,
+            Viewbox = new Rect(0, 0, ((BitmapSource) image).PixelWidth, ((BitmapSource) image).PixelHeight),
+            Viewport = new Rect(0, 0, 1, 1)
+        };
+        RenderOptions.SetBitmapScalingMode(brush, BitmapScalingMode.NearestNeighbor);
+        brush.Freeze();
+
+        var material = new DiffuseMaterial(brush);
+        material.Freeze();
+        var back = new DiffuseMaterial(brush) { Color = Color.FromRgb(120, 120, 120) };
+        back.Freeze();
+
+        _rig.Clear();
+        _rootGroup = new Model3DGroup { Transform = _rootTransform };
+        _rootTransform.Children.Clear();
+        _rootTransform.Children.Add(new TranslateTransform3D(0, -16, 0));
+        _rootTransform.Children.Add(new RotateTransform3D(_rootYaw));
+        _rootTransform.Children.Add(new TranslateTransform3D(0, 16, 0));
+        _rootTransform.Children.Add(_rootBob);
+
+        foreach (var part in parts)
+        {
+            if (!ShowBody && part.Part != SkinPart.Head) continue;
+
+            var yaw = new AxisAngleRotation3D(new Vector3D(0, 1, 0), 0);
+            var pitch = new AxisAngleRotation3D(new Vector3D(1, 0, 0), 0);
+            var pivot = new Vector3D(part.Pivot.X, part.Pivot.Y, part.Pivot.Z);
+
+            var transform = new Transform3DGroup();
+            transform.Children.Add(new TranslateTransform3D(-pivot));
+            transform.Children.Add(new RotateTransform3D(yaw));
+            transform.Children.Add(new RotateTransform3D(pitch));
+            transform.Children.Add(new TranslateTransform3D(pivot));
+
+            var group = new Model3DGroup { Transform = transform };
+            group.Children.Add(ToWpf(part.Base, material, back));
+            group.Children.Add(ToWpf(part.Overlay, material, back));
+            _rootGroup.Children.Add(group);
+
+            _rig.Add(new PartRig { Group = group, Part = part.Part, Pivot = pivot, Yaw = yaw, Pitch = pitch });
+        }
+
+        FigureRoot.Content = _rootGroup;
+        UpdateFraming();
+        ApplyQuality();
+    }
+
+    private static GeometryModel3D ToWpf(MeshData mesh, Material material, Material back)
+    {
+        var geometry = new MeshGeometry3D
+        {
+            Positions = new Point3DCollection(mesh.Positions.Select(p => new Point3D(p.X, p.Y, p.Z))),
+            Normals = new Vector3DCollection(mesh.Normals.Select(n => new Vector3D(n.X, n.Y, n.Z))),
+            TextureCoordinates = new PointCollection(mesh.TextureCoordinates.Select(t => new Point(t.X, t.Y))),
+            TriangleIndices = new Int32Collection(mesh.Indices)
+        };
+        geometry.Freeze();
+
+        var model = new GeometryModel3D { Geometry = geometry, Material = material, BackMaterial = back };
+        model.Freeze();
+        return model;
+    }
+
+    private void UpdateFraming()
+    {
+        if (!IsLoaded) return;
+        ApplyQuality();
+
+        bool body = ShowBody;
+        // Distance chosen so the full 32-unit figure (or 8-unit head) fits the
+        // viewport vertically at the framing FOV, with comfortable margins.
+        double dist = body ? 60.0 : 20.0;
+        _minDistance = body ? 12.0 : 8.0;
+        _maxDistance = body ? 90.0 : 40.0;
+
+        if (!_framedOnce)
+        {
+            _framedOnce = true;
+            _distance = dist;
+        }
+        _framingDistance = dist;
+        ApplyCamera();
+    }
+
+    private void ApplyCamera()
+    {
+        var target = new Point3D(0, ShowBody ? 16.0 : 28.0, 0);
+        double cy = Math.Cos(_pitch);
+        var pos = new Point3D(
+            target.X + _distance * Math.Sin(_yaw) * cy,
+            target.Y + _distance * Math.Sin(_pitch),
+            target.Z + _distance * Math.Cos(_yaw) * cy);
+
+        Camera.Position = pos;
+        Camera.LookDirection = new Vector3D(target.X - pos.X, target.Y - pos.Y, target.Z - pos.Z);
+        Camera.UpDirection = new Vector3D(0, 1, 0);
+        Camera.FieldOfView = ShowBody ? 36 : 40;
+    }
+
+    private void ApplyQuality()
+    {
+        bool low = RenderQuality.Trim().Equals("Low", StringComparison.OrdinalIgnoreCase);
+        RenderOptions.SetEdgeMode(Viewport, low ? EdgeMode.Aliased : EdgeMode.Unspecified);
+    }
+
+    // ------------------------------------------------------------------ loading
+
+    private async Task<byte[]?> LoadBytesAsync(string url, CancellationToken ct)
+    {
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
         {
             if (uri.Scheme == "file")
             {
-                return File.Exists(uri.LocalPath) ? await File.ReadAllBytesAsync(uri.LocalPath).ConfigureAwait(false) : null;
+                return File.Exists(uri.LocalPath) ? await File.ReadAllBytesAsync(uri.LocalPath, ct).ConfigureAwait(false) : null;
             }
             if (uri.Scheme == "pack")
             {
@@ -112,7 +458,7 @@ public partial class SkinViewer : UserControl
                     using var stream = Application.GetResourceStream(uri)?.Stream;
                     if (stream is null) return null;
                     using var ms = new MemoryStream();
-                    await stream.CopyToAsync(ms).ConfigureAwait(false);
+                    await stream.CopyToAsync(ms, ct).ConfigureAwait(false);
                     return ms.ToArray();
                 }
                 catch
@@ -121,15 +467,28 @@ public partial class SkinViewer : UserControl
                 }
             }
         }
-        if (File.Exists(textureUrl))
+        if (File.Exists(url))
         {
-            return await File.ReadAllBytesAsync(textureUrl).ConfigureAwait(false);
+            return await File.ReadAllBytesAsync(url, ct).ConfigureAwait(false);
         }
-        var http = AppHost.Services!.Container.Resolve<Launcher.Network.Http>();
-        return await http.GetBytesAsync(textureUrl).ConfigureAwait(false);
+
+        try
+        {
+            if (_cache is null && AppHost.Services?.Container is { } container)
+            {
+                var http = container.Resolve<Launcher.Network.Http>();
+                _cache = http is null ? null : new SkinCache(http);
+            }
+            return _cache is null ? null : await _cache.GetAsync(url, ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
-    private static BitmapSource? Load(byte[] bytes)
+    /// <summary>Decodes PNG bytes into BGRA pixels plus a frozen image for the material.</summary>
+    private static (SkinTexture Texture, BitmapSource Image)? Decode(byte[] bytes)
     {
         try
         {
@@ -139,8 +498,16 @@ public partial class SkinViewer : UserControl
             src.CacheOption = BitmapCacheOption.OnLoad;
             src.StreamSource = ms;
             src.EndInit();
-            src.Freeze();
-            return src;
+
+            BitmapSource tex = src.Format != PixelFormats.Pbgra32
+                ? new FormatConvertedBitmap(src, PixelFormats.Pbgra32, null, 0)
+                : src;
+            if (tex.PixelWidth <= 0 || tex.PixelHeight <= 0) return null;
+
+            var buf = new byte[tex.PixelWidth * tex.PixelHeight * 4];
+            tex.CopyPixels(buf, tex.PixelWidth * 4, 0);
+            tex.Freeze();
+            return (new SkinTexture(tex.PixelWidth, tex.PixelHeight, buf), tex);
         }
         catch
         {
@@ -148,181 +515,12 @@ public partial class SkinViewer : UserControl
         }
     }
 
-    private void Render()
+    /// <summary>Builds a frozen bitmap source from raw BGRA pixels.</summary>
+    private static BitmapSource ToImage(SkinTexture tex)
     {
-        if (!IsLoaded) return;
-        try
-        {
-            RenderCore();
-        }
-        catch (Exception ex)
-        {
-            // A malformed/unusual texture must never take down the app or the preview.
-            try { Busy.Visibility = Visibility.Collapsed; } catch { /* UI may be torn down */ }
-            try { AppHost.Services?.Log.Warn($"Skin preview render failed: {ex.Message}"); } catch { /* logging is best-effort */ }
-        }
-    }
-
-    private void RenderCore()
-    {
-        BitmapSource? src;
-        lock (_lock) src = _bmp;
-        if (src is null) return;
-
-        // Normalise to a 32-bit BGRA buffer so pixel reads below are always correct.
-        BitmapSource tex = src.Format != PixelFormats.Pbgra32
-            ? new FormatConvertedBitmap(src, PixelFormats.Pbgra32, null, 0)
-            : src;
-
-        int texW = tex.PixelWidth;
-        int texH = tex.PixelHeight;
-        if (texW <= 0 || texH <= 0)
-        {
-            Busy.Visibility = Visibility.Collapsed;
-            return;
-        }
-
-        int[] srcPixels = new int[texW * texH];
-        tex.CopyPixels(srcPixels, texW * 4, 0);
-        bool InTex(int x, int y) => x >= 0 && y >= 0 && x < texW && y < texH;
-        int Sample(int x, int y) => InTex(x, y) ? srcPixels[y * texW + x] : 0;
-        bool IsOpaque(int c) => (c & 0xFF000000) != 0;
-        int Shade(int c, float f)
-        {
-            int a = (c >> 24) & 0xFF, b = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, r = c & 0xFF;
-            return (a << 24) | ((int)(b * f) << 16) | ((int)(g * f) << 8) | (int)(r * f);
-        }
-
-        // --- Figure layout (units = output pixels) ---
-        bool isNewFormat = texW >= 64 && texH >= 64;
-        bool hasBody = ShowBody && isNewFormat;
-        bool isSlim = isNewFormat && !IsOpaque(Sample(47, 20)) && !IsOpaque(Sample(47, 24));
-
-        // Choose the block size so the whole figure fits the control at 1:1 (crisp pixels),
-        // capped so the head never exceeds the requested HeadWidth.
-        double availW = ActualWidth - 24;
-        double availH = ActualHeight - 24;
-        int cellsW = hasBody ? 16 : 11;            // body 16 wide / head cube 11 wide
-        int cellsH = hasBody ? 36 : 11;            // 3 depth + 8 face + 1 gap + 24 body
-        int cell = 8;
-        if (availW > 0 && availH > 0)
-            cell = Math.Max(3, Math.Min((int)(availW / cellsW), (int)(availH / cellsH)));
-        cell = Math.Min(cell, Math.Max(3, (int)(HeadWidth / 8.0)));
-
-        int depth = cell * 3;                      // cube depth offset
-        int face = 8 * cell;
-        int gap = cell;
-        int bodyW = 16 * cell;
-        int bodyH = 24 * cell;
-        int cubeW = face + depth;
-        int figW = Math.Max(bodyW, cubeW);
-        int figH = depth + face + gap + bodyH;
-
-        int[] dst = new int[figW * figH];
-        void Put(int dx, int dy, int color)
-        {
-            if (dx < 0 || dy < 0 || dx >= figW || dy >= figH) return;
-            if (IsOpaque(color)) dst[dy * figW + dx] = color;
-        }
-        void FillCell(int ox, int oy, int color)
-        {
-            for (int py = 0; py < cell; py++)
-            for (int px = 0; px < cell; px++)
-                Put(ox + px, oy + py, color);
-        }
-        // Straight scaled region (front faces, body parts).
-        void StampRect(int sx, int sy, int sw, int sh, int bx, int by, float shade = 1f)
-        {
-            for (int y = 0; y < sh; y++)
-            for (int x = 0; x < sw; x++)
-            {
-                int c = Sample(sx + x, sy + y);
-                if (!IsOpaque(c)) continue;
-                if (shade < 1f) c = Shade(c, shade);
-                FillCell(bx + x * cell, by + y * cell, c);
-            }
-        }
-        // Top face: source row 0 = back edge, row sh-1 = front edge; sheared up and right.
-        void StampTop(int sx, int sy, int sw, int sh, int bx, int by, float shade = 1f)
-        {
-            for (int y = 0; y < sh; y++)
-            for (int x = 0; x < sw; x++)
-            {
-                int c = Sample(sx + x, sy + y);
-                if (!IsOpaque(c)) continue;
-                if (shade < 1f) c = Shade(c, shade);
-                int back = sh - 1 - y;
-                FillCell(bx + x * cell + (int)(back * depth / (float)sh), by - (int)(back * depth / (float)sh), c);
-            }
-        }
-        // Right face: source column 0 = front edge, column sw-1 = back edge; sheared up and right.
-        void StampRight(int sx, int sy, int sw, int sh, int bx, int by, float shade = 1f)
-        {
-            for (int y = 0; y < sh; y++)
-            for (int x = 0; x < sw; x++)
-            {
-                int c = Sample(sx + x, sy + y);
-                if (!IsOpaque(c)) continue;
-                if (shade < 1f) c = Shade(c, shade);
-                FillCell(bx + (int)(x * depth / (float)sw), by + y * cell - (int)(x * depth / (float)sw), c);
-            }
-        }
-
-        int headX = (figW - cubeW) / 2;
-        int frontTopY = depth;
-        int frontRightX = headX + face;
-
-        // Head cube - side/top faces first (they sit behind), front face last so it wins
-        // on any edge overlap. The right face is shaded to give the cube depth.
-        StampRight(0, 8, 8, 8, frontRightX, frontTopY, 0.82f);   // head right
-        StampRight(32, 8, 8, 8, frontRightX, frontTopY, 0.82f);  // hat right
-        StampTop(8, 0, 8, 8, headX, frontTopY, 1f);              // head top
-        StampTop(40, 0, 8, 8, headX, frontTopY, 1f);             // hat top
-        StampRect(8, 8, 8, 8, headX, frontTopY);                 // head front
-        StampRect(40, 8, 8, 8, headX, frontTopY);                // hat front
-
-        // --- Body (front view), only for modern 64x64 textures ---
-        if (hasBody)
-        {
-            int armW = isSlim ? 3 : 4;
-            int armShift = isSlim ? 0 : 1;
-            int bodyX = (figW - bodyW) / 2;
-            int bodyY = frontTopY + face + gap;
-            StampRect(20, 20, 8, 12, bodyX + 4 * cell, bodyY);                            // chest (front)
-            StampRect(44, 20, armW, 12, bodyX, bodyY);                                    // right arm (viewer left)
-            StampRect(36, isNewFormat ? 52 : 20, armW, 12, bodyX + (12 + armShift) * cell, bodyY); // left arm (viewer right)
-            StampRect(4, 20, 4, 12, bodyX + 4 * cell, bodyY + 12 * cell);                 // right leg (viewer left)
-            StampRect(isNewFormat ? 20 : 20, isNewFormat ? 52 : 20, 4, 12, bodyX + 8 * cell, bodyY + 12 * cell); // left leg
-        }
-
-        var figureWb = new WriteableBitmap(figW, figH, 96, 96, PixelFormats.Pbgra32, null);
-        figureWb.WritePixels(new Int32Rect(0, 0, figW, figH), dst, figW * 4, 0);
-
-        // Display at native size (crisp). Shrink only if the box is unexpectedly smaller.
-        double renderW = figW;
-        double renderH = figH;
-        if (availW > 0 && availH > 0)
-        {
-            double fit = Math.Min(availW / figW, availH / figH);
-            if (fit < 1.0)
-            {
-                renderW = figW * fit;
-                renderH = figH * fit;
-            }
-        }
-
-        Figure.Width = renderW;
-        Figure.Height = renderH;
-        Figure.Fill = new ImageBrush(figureWb);
-
-        Busy.Visibility = Visibility.Collapsed;
-    }
-
-    private void Unlock()
-    {
-        lock (_lock)
-        {
-            _bmp = null;
-        }
+        var wb = new WriteableBitmap(tex.Width, tex.Height, 96, 96, PixelFormats.Pbgra32, null);
+        wb.WritePixels(new Int32Rect(0, 0, tex.Width, tex.Height), tex.Pixels, tex.Width * 4, 0);
+        wb.Freeze();
+        return wb;
     }
 }

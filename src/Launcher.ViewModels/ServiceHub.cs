@@ -74,9 +74,21 @@ public sealed class ServiceHub
     /// <summary>Invoked to prompt for instance rename text.</summary>
     public Func<string, string, string?>? RenamePrompt { get; set; }
 
+    /// <summary>Type of content the standalone content installer window is opened for.</summary>
+    public enum ContentKind
+    {
+        Mods,
+        Shaders,
+        ResourcePacks
+    }
+
     /// <summary>Opens the standalone mod installer window for an instance. Returns
     /// true when at least one mod was installed.</summary>
-    public Func<GameInstance, bool>? OpenModInstaller { get; set; }
+    public Func<GameInstance, ContentKind, bool>? OpenModInstaller { get; set; }
+
+    /// <summary>Opens the version picker window to change the version of an installed
+    /// mod. Returns true when the version was changed.</summary>
+    public Func<GameInstance, ModInfo, bool>? OpenModVersionPicker { get; set; }
 
     /// <summary>Shows the update announcement dialog for an available release (wired by the UI layer).</summary>
     public Action<UpdateInfo>? OpenUpdateDialog { get; set; }

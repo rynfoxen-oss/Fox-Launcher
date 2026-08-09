@@ -29,7 +29,6 @@ public sealed class ModsViewModel : ViewModelBase
     private IReadOnlyList<ModInfo> _selectedMods = Array.Empty<ModInfo>();
     private bool _isUpdating;
     private int _updateCount;
-    private int _availableUpdateCount;
     private bool _showDetailDrawer;
     private ModSearcher.SearchRow? _detailMod;
     private bool _isImporting;
@@ -54,6 +53,9 @@ public sealed class ModsViewModel : ViewModelBase
         InstallSelectedCommand = new AsyncRelayCommand(InstallSelectedAsync);
         InstallLocalCommand = new RelayCommand(InstallLocal);
         OpenInstallerCommand = new RelayCommand(OpenInstaller);
+        OpenShadersInstallerCommand = new RelayCommand(OpenShadersInstaller);
+        OpenResourcePacksInstallerCommand = new RelayCommand(OpenResourcePacksInstaller);
+        ChangeVersionCommand = new RelayCommand(ChangeVersion);
         ToggleCommand = new RelayCommand(Toggle);
         DeleteCommand = new RelayCommand(Delete);
         OpenFolderCommand = new RelayCommand(OpenFolder);
@@ -181,6 +183,9 @@ public sealed class ModsViewModel : ViewModelBase
     public AsyncRelayCommand InstallSelectedCommand { get; }
     public RelayCommand InstallLocalCommand { get; }
     public RelayCommand OpenInstallerCommand { get; }
+    public RelayCommand OpenShadersInstallerCommand { get; }
+    public RelayCommand OpenResourcePacksInstallerCommand { get; }
+    public RelayCommand ChangeVersionCommand { get; }
     public RelayCommand ToggleCommand { get; }
     public RelayCommand DeleteCommand { get; }
     public RelayCommand OpenFolderCommand { get; }
@@ -544,7 +549,7 @@ public sealed class ModsViewModel : ViewModelBase
         var results = await Services.ModSearch.SearchAsync(
             SearchQuery?.Trim() ?? "", Loader, GameVersion,
             SelectedSort?.Value ?? "relevance",
-            SelectedCategory?.Slug, offset, ct);
+            SelectedCategory?.Slug, offset, ct: ct);
 
         var installed = Services.Mods.InstalledProjectIds(InstanceId!);
         foreach (var row in results) row.Installed = installed.Contains(row.ProjectId);
@@ -648,7 +653,41 @@ public sealed class ModsViewModel : ViewModelBase
         if (InstanceId is null) return;
         var instance = Instances.FirstOrDefault(i => i.Id == InstanceId);
         if (instance is null) return;
-        if (Services.OpenModInstaller?.Invoke(instance) == true) Refresh();
+        if (Services.OpenModInstaller?.Invoke(instance, ServiceHub.ContentKind.Mods) == true) Refresh();
+    }
+
+    private void OpenShadersInstaller()
+    {
+        if (InstanceId is null) return;
+        var instance = Instances.FirstOrDefault(i => i.Id == InstanceId);
+        if (instance is null) return;
+        if (Services.OpenModInstaller?.Invoke(instance, ServiceHub.ContentKind.Shaders) == true) Refresh();
+    }
+
+    private void OpenResourcePacksInstaller()
+    {
+        if (InstanceId is null) return;
+        var instance = Instances.FirstOrDefault(i => i.Id == InstanceId);
+        if (instance is null) return;
+        if (Services.OpenModInstaller?.Invoke(instance, ServiceHub.ContentKind.ResourcePacks) == true) Refresh();
+    }
+
+    private void ChangeVersion(object? parameter)
+    {
+        var mod = parameter as ModInfo ?? SelectedMod;
+        if (mod is null || InstanceId is null) return;
+        if (string.IsNullOrEmpty(mod.ProjectId))
+        {
+            Status = "This mod has no Modrinth project, so its version cannot be changed.";
+            return;
+        }
+        var instance = Instances.FirstOrDefault(i => i.Id == InstanceId);
+        if (instance is null) return;
+        if (Services.OpenModVersionPicker?.Invoke(instance, mod) == true)
+        {
+            Refresh();
+            _ = CheckUpdatesAsync();
+        }
     }
 
     private void Toggle(object? parameter)
@@ -769,34 +808,9 @@ public sealed class ModsViewModel : ViewModelBase
         Status = "Checking for updates...";
         try
         {
-            var mods = Services.Mods.ListMods(InstanceId);
-            // Parallelise the per-mod Modrinth calls, but cap concurrency at
-            // 8 to stay under the public API rate limit (200 req/min).
-            using var gate = new SemaphoreSlim(8);
-            var tasks = mods
-                .Where(m => !string.IsNullOrEmpty(m.ProjectId) && !string.IsNullOrEmpty(m.VersionId))
-                .Select(async mod =>
-                {
-                    await gate.WaitAsync();
-                    try
-                    {
-                        var versions = await Services.Modrinth.GetVersionsAsync(mod.ProjectId, Loader, GameVersion);
-                        var latest = versions.FirstOrDefault();
-                        mod.HasUpdate = latest is not null && latest.Id != mod.VersionId;
-                        if (mod.HasUpdate)
-                        {
-                            mod.LatestVersionNumber = latest!.VersionNumber;
-                            Interlocked.Increment(ref _availableUpdateCount);
-                        }
-                    }
-                    catch { /* skip mods whose metadata cannot be resolved */ }
-                    finally { gate.Release(); }
-                })
-                .ToList();
+            var mods = await Services.Mods.CheckForUpdatesAsync(InstanceId, Loader, GameVersion!);
 
-            await Task.WhenAll(tasks);
-
-            var available = _availableUpdateCount;
+            var available = mods.Count(m => m.HasUpdate);
             UpdateCount = available;
             Status = available == 0 ? "All mods are up to date." : $"{available} mod(s) have updates available.";
             Mods = mods;

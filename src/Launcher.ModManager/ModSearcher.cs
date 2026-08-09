@@ -63,13 +63,14 @@ public sealed class ModSearcher
     /// <summary>Number of results requested per page.</summary>
     public const int PageSize = 40;
 
-    /// <summary>Searches Modrinth with optional loader, game version and category
-    /// filters, sorted by the given index.</summary>
+    /// <summary>Searches Modrinth with optional loader, game version, project type
+    /// (mod/shader/resourcepack) and category filters, sorted by the given index.</summary>
     public async Task<List<SearchRow>> SearchAsync(
-        string query, ModLoaderType loader, string? gameVersion,
-        string index = "relevance", string? category = null, int offset = 0, CancellationToken ct = default)
+        string query, ModLoaderType? loader, string? gameVersion,
+        string index = "relevance", string? category = null, int offset = 0,
+        string? projectType = null, CancellationToken ct = default)
     {
-        var result = await _api.SearchAsync(query, loader, gameVersion, PageSize, index, category, offset, ct);
+        var result = await _api.SearchAsync(query, loader, gameVersion, PageSize, index, category, offset, projectType, ct);
         return result.Hits.Select(h => new SearchRow
         {
             ProjectId = h.ProjectId,

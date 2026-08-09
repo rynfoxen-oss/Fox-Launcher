@@ -63,10 +63,15 @@
                 <Border Style="{StaticResource CardPanel}" Margin="0,0,0,16"
                         Visibility="{Binding HasActiveAccount, Converter={StaticResource BoolToVisibility}}">
                     <StackPanel>
-                        <TextBlock Text="Player skin" Style="{StaticResource H2Text}"/>
-                        <TextBlock Text="Preview and change the skin worn by this account in-game."
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Player skin" Style="{StaticResource H2Text}" VerticalAlignment="Center"/>
+                            <CheckBox Content="3D preview" IsChecked="{Binding SkinPreview3D}" Margin="16,0,0,0"
+                                      VerticalAlignment="Center" Style="{StaticResource AccentCheckBox}"
+                                      ToolTip="Show the skin on an interactive 3D model"/>
+                        </StackPanel>
+                        <TextBlock Text="Preview and change the skin worn by this account in-game. Drag the figure to orbit, scroll to zoom."
                                    Style="{StaticResource MutedText}" Margin="0,6,0,14"/>
-                        <Grid>
+                        <Grid Visibility="{Binding SkinPreview3D, Converter={StaticResource BoolToVisibility}}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
@@ -75,16 +80,42 @@
                                 <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="20" Padding="12"
                                         BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
                                     <ctl:SkinViewer Width="150" Height="198" TextureUrl="{Binding ActiveSkinUrl}"
-                                                    ShowBody="True" HeadWidth="98"/>
+                                                    ShowBody="True" SkinVariant="{Binding ActiveSkinVariant}"
+                                                    ModelPreference="{Binding SkinModelPreference}"
+                                                    AnimationEnabled="{Binding SkinAnimation}"
+                                                    RenderQuality="{Binding SkinPreviewQuality}"/>
                                 </Border>
                                 <TextBlock Text="{Binding SkinHint}" Style="{StaticResource CaptionText}"
                                            MaxWidth="150" TextWrapping="Wrap" TextAlignment="Center"
                                            HorizontalAlignment="Center" Margin="0,12,0,0"/>
                             </StackPanel>
                             <StackPanel Grid.Column="1" Margin="18,0,0,0" VerticalAlignment="Center">
-                                <CheckBox Content="Use the slim (Alex) model" IsChecked="{Binding IsSlimVariant}"
-                                          Style="{StaticResource AccentCheckBox}"/>
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                                    <TextBlock Text="Model:" Style="{StaticResource MutedText}" VerticalAlignment="Center"/>
+                                    <RadioButton Content="Auto" GroupName="SkinModel" Margin="12,0,0,0"
+                                                 IsChecked="{Binding IsModelAuto}"
+                                                 ToolTip="Use the account's declared model, otherwise detect from the texture"/>
+                                    <RadioButton Content="Classic" GroupName="SkinModel" Margin="10,0,0,0"
+                                                 IsChecked="{Binding IsModelClassic}"/>
+                                    <RadioButton Content="Slim" GroupName="SkinModel" Margin="10,0,0,0"
+                                                 IsChecked="{Binding IsModelSlim}"/>
+                                </StackPanel>
+                                <CheckBox Content="Idle animation" IsChecked="{Binding SkinAnimation}" Margin="0,10,0,0"
+                                          Style="{StaticResource AccentCheckBox}"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0" HorizontalAlignment="Left">
+                                    <TextBlock Text="Quality:" Style="{StaticResource MutedText}" VerticalAlignment="Center"/>
+                                    <ComboBox Width="110" Margin="10,0,0,0"
+                                              SelectedValue="{Binding SkinPreviewQuality}" SelectedValuePath="Content"
+                                              Style="{StaticResource InputComboBox}">
+                                        <ComboBoxItem Content="Low"/>
+                                        <ComboBoxItem Content="Medium"/>
+                                        <ComboBoxItem Content="High"/>
+                                    </ComboBox>
+                                </StackPanel>
+                                <CheckBox Content="Use the slim (Alex) model when uploading" IsChecked="{Binding IsSlimVariant}"
+                                          Margin="0,14,0,0" Style="{StaticResource AccentCheckBox}"
+                                          ToolTip="Uploaded skins are marked as slim (3px wide arms)"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,12,0,0">
                                     <Button Content="Change skin..." Style="{StaticResource PrimaryButton}" MinWidth="150"
                                             Command="{Binding ChangeSkinCommand}"
                                             IsEnabled="{Binding IsSkinBusy, Converter={StaticResource InverseBoolean}}"/>
@@ -93,7 +124,7 @@
                                             IsEnabled="{Binding IsSkinBusy, Converter={StaticResource InverseBoolean}}"/>
                                 </StackPanel>
                                 <TextBlock Text="The preview updates instantly when a different skin is selected." Style="{StaticResource MutedText}"
-                                           TextWrapping="Wrap" MaxWidth="320"/>
+                                           TextWrapping="Wrap" MaxWidth="320" Margin="0,12,0,0"/>
                             </StackPanel>
                         </Grid>
                     </StackPanel>

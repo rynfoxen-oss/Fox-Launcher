@@ -43,7 +43,7 @@ public sealed class SettingsViewModel : ViewModelBase
             new SettingsSection("performance", "Performance", "JVM tuning and visual effects", "\uE945",
                 "fps gpu gc pause pretouch multicore animation boost"),
             new SettingsSection("appearance", "Appearance", "Theme and accent color", "\uE790",
-                "theme accent color dark light midnight reduce effects"),
+                "theme accent color dark light midnight high contrast reduce effects"),
             new SettingsSection("downloads", "Downloads", "How downloads run", "\uE896",
                 "threads parallel speed downloads network"),
             new SettingsSection("general", "General", "Language, audio and behavior", "\uE713",
@@ -481,7 +481,7 @@ public sealed class SettingsViewModel : ViewModelBase
 
     public string AppVersion => AppInfo.Version;
 
-    public IReadOnlyList<string> Themes { get; } = new[] { "dark", "midnight", "light" };
+    public IReadOnlyList<string> Themes { get; } = new[] { "dark", "midnight", "light", "highcontrast" };
 
     /// <summary>Pages that can be shown when the launcher starts.</summary>
     public IReadOnlyList<string> StartupPages { get; } = new[]

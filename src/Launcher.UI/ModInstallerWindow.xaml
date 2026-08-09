@@ -53,7 +53,7 @@
         <!-- Header -->
         <Grid Grid.Row="0">
             <StackPanel>
-                <TextBlock Text="Mod Installer" Style="{StaticResource H1Text}"/>
+                <TextBlock x:Name="TitleText" Text="Mod Installer" Style="{StaticResource H1Text}"/>
                 <TextBlock x:Name="InstanceLabel" Style="{StaticResource SecondaryText}" Margin="0,4,0,0"/>
             </StackPanel>
             <Button Content="✕" Style="{StaticResource GhostButton}" HorizontalAlignment="Right"
@@ -62,9 +62,17 @@
 
         <!-- Source pills -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,14,0,0">
-            <RadioButton x:Name="BrowseRadio" Style="{StaticResource InstallerPill}" IsChecked="True"
+            <RadioButton x:Name="ModsRadio" Style="{StaticResource InstallerPill}" IsChecked="True"
                          GroupName="Source" Checked="OnSourceChanged">
-                <TextBlock Text="Browse Modrinth"/>
+                <TextBlock Text="Mods"/>
+            </RadioButton>
+            <RadioButton x:Name="ShadersRadio" Style="{StaticResource InstallerPill}" Margin="8,0,0,0"
+                         GroupName="Source" Checked="OnSourceChanged">
+                <TextBlock Text="Shaders"/>
+            </RadioButton>
+            <RadioButton x:Name="PacksRadio" Style="{StaticResource InstallerPill}" Margin="8,0,0,0"
+                         GroupName="Source" Checked="OnSourceChanged">
+                <TextBlock Text="Resource Packs"/>
             </RadioButton>
             <RadioButton x:Name="LocalRadio" Style="{StaticResource InstallerPill}" Margin="8,0,0,0"
                          GroupName="Source" Checked="OnSourceChanged">
