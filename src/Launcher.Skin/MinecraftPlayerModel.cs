@@ -99,10 +99,10 @@ public sealed class MinecraftPlayerModel
                 mesh.Positions.Add(p);
                 mesh.Normals.Add(n);
             }
-            mesh.TextureCoordinates.Add(new Vector2(u0, v1));
-            mesh.TextureCoordinates.Add(new Vector2(u1, v1));
-            mesh.TextureCoordinates.Add(new Vector2(u1, v0));
             mesh.TextureCoordinates.Add(new Vector2(u0, v0));
+            mesh.TextureCoordinates.Add(new Vector2(u1, v0));
+            mesh.TextureCoordinates.Add(new Vector2(u1, v1));
+            mesh.TextureCoordinates.Add(new Vector2(u0, v1));
             mesh.Indices.Add(start);
             mesh.Indices.Add(start + 1);
             mesh.Indices.Add(start + 2);
@@ -121,42 +121,42 @@ public sealed class MinecraftPlayerModel
         Face(
             new[] { (new Vector3(x0, y0, z1), new Vector3(0, 0, 1)), (new Vector3(x1, y0, z1), new Vector3(0, 0, 1)),
                     (new Vector3(x1, y1, z1), new Vector3(0, 0, 1)), (new Vector3(x0, y1, z1), new Vector3(0, 0, 1)) },
-            r.U / uvW, 1 - (r.V + r.H) / uvH, (r.U + r.W) / uvW, 1 - r.V / uvH);
+            r.U / uvW, r.V / uvH, (r.U + r.W) / uvW, (r.V + r.H) / uvH);
 
         // Back (-Z), mirrored in x so the texture is not flipped.
         r = regions(part, layer, SkinFace.Back, slim, _textureWidth);
         Face(
             new[] { (new Vector3(x1, y0, z0), new Vector3(0, 0, -1)), (new Vector3(x0, y0, z0), new Vector3(0, 0, -1)),
                     (new Vector3(x0, y1, z0), new Vector3(0, 0, -1)), (new Vector3(x1, y1, z0), new Vector3(0, 0, -1)) },
-            r.U / uvW, 1 - (r.V + r.H) / uvH, (r.U + r.W) / uvW, 1 - r.V / uvH);
+            r.U / uvW, r.V / uvH, (r.U + r.W) / uvW, (r.V + r.H) / uvH);
 
         // Right face (character's right, -X).
         r = regions(part, layer, SkinFace.Right, slim, _textureWidth);
         Face(
             new[] { (new Vector3(x0, y0, z0), new Vector3(-1, 0, 0)), (new Vector3(x0, y0, z1), new Vector3(-1, 0, 0)),
                     (new Vector3(x0, y1, z1), new Vector3(-1, 0, 0)), (new Vector3(x0, y1, z0), new Vector3(-1, 0, 0)) },
-            r.U / uvW, 1 - (r.V + r.H) / uvH, (r.U + r.W) / uvW, 1 - r.V / uvH);
+            r.U / uvW, r.V / uvH, (r.U + r.W) / uvW, (r.V + r.H) / uvH);
 
         // Left face (character's left, +X), mirrored.
         r = regions(part, layer, SkinFace.Left, slim, _textureWidth);
         Face(
             new[] { (new Vector3(x1, y0, z1), new Vector3(1, 0, 0)), (new Vector3(x1, y0, z0), new Vector3(1, 0, 0)),
                     (new Vector3(x1, y1, z0), new Vector3(1, 0, 0)), (new Vector3(x1, y1, z1), new Vector3(1, 0, 0)) },
-            r.U / uvW, 1 - (r.V + r.H) / uvH, (r.U + r.W) / uvW, 1 - r.V / uvH);
+            r.U / uvW, r.V / uvH, (r.U + r.W) / uvW, (r.V + r.H) / uvH);
 
         // Top (+Y): region v=top row is the back edge, v+h is the front edge.
         r = regions(part, layer, SkinFace.Top, slim, _textureWidth);
         Face(
             new[] { (new Vector3(x0, y1, z1), new Vector3(0, 1, 0)), (new Vector3(x1, y1, z1), new Vector3(0, 1, 0)),
                     (new Vector3(x1, y1, z0), new Vector3(0, 1, 0)), (new Vector3(x0, y1, z0), new Vector3(0, 1, 0)) },
-            r.U / uvW, 1 - (r.V + r.H) / uvH, (r.U + r.W) / uvW, 1 - r.V / uvH);
+            r.U / uvW, r.V / uvH, (r.U + r.W) / uvW, (r.V + r.H) / uvH);
 
         // Bottom (-Y), mirrored.
         r = regions(part, layer, SkinFace.Bottom, slim, _textureWidth);
         Face(
             new[] { (new Vector3(x0, y0, z0), new Vector3(0, -1, 0)), (new Vector3(x1, y0, z0), new Vector3(0, -1, 0)),
                     (new Vector3(x1, y0, z1), new Vector3(0, -1, 0)), (new Vector3(x0, y0, z1), new Vector3(0, -1, 0)) },
-            (r.U + r.W) / uvW, 1 - (r.V + r.H) / uvH, r.U / uvW, 1 - r.V / uvH);
+            (r.U + r.W) / uvW, r.V / uvH, r.U / uvW, (r.V + r.H) / uvH);
 
         return mesh;
     }
