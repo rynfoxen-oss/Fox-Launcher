@@ -101,7 +101,7 @@ public sealed class GameLauncherService
         if (string.IsNullOrEmpty(javaPath))
         {
             progress?.Report(new InstallProgress { Stage = "Locating Java...", Fraction = 0.05 });
-            var runtime = _java.FindJavaForGame(gameVersion, _settings.JavaPath, javaMajor);
+            var runtime = await _java.FindJavaForGameAsync(gameVersion, _settings.JavaPath, javaMajor);
             if (runtime is null)
             {
                 progress?.Report(new InstallProgress { Stage = $"Installing Java {javaMajor}...", Fraction = 0.1 });
@@ -178,14 +178,25 @@ public sealed class GameLauncherService
             _log.Info($"Classpath Entries: {classpathEntries.Count}");
             _log.Info($"Classpath Length: {classpath.Length}");
 
-            // Log first few classpath entries for debugging
-            for (int i = 0; i < Math.Min(5, classpathEntries.Count); i++)
+            // Log first few classpath entries only when verbose logging is on
+            // (the launcher.log ballooned to 3-5 MB per launch otherwise).
+            if (IsVerboseLoggingEnabled())
             {
-                _log.Info($"  Classpath[{i}]: {classpathEntries[i]}");
+                for (int i = 0; i < classpathEntries.Count; i++)
+                {
+                    _log.Debug($"  Classpath[{i}]: {classpathEntries[i]}");
+                }
             }
-            if (classpathEntries.Count > 5)
+            else
             {
-                _log.Info($"  ... and {classpathEntries.Count - 5} more entries");
+                for (int i = 0; i < Math.Min(5, classpathEntries.Count); i++)
+                {
+                    _log.Info($"  Classpath[{i}]: {classpathEntries[i]}");
+                }
+                if (classpathEntries.Count > 5)
+                {
+                    _log.Info($"  ... and {classpathEntries.Count - 5} more entries (set VerboseLogging in settings.json to see all)");
+                }
             }
 
             _log.Info($"Main Class: {version.MainClass}");
@@ -298,6 +309,25 @@ public sealed class GameLauncherService
         }
         catch { /* best-effort scan */ }
         return null;
+    }
+
+    /// <summary>
+    /// Returns true when the verbose logging flag is enabled in
+    /// <c>AppSettings</c>. Off by default so launcher.log doesn't balloon
+    /// (a single launch used to write ~3 MB of classpath lines).
+    /// </summary>
+    private static bool IsVerboseLoggingEnabled()
+    {
+        try
+        {
+            if (!File.Exists(Paths.SettingsFile)) return false;
+            using var doc = JsonDocument.Parse(File.ReadAllText(Paths.SettingsFile));
+            return doc.RootElement.TryGetProperty("VerboseLogging", out var v) && v.GetBoolean();
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>

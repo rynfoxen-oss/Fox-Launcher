@@ -29,6 +29,7 @@ public sealed class ModsViewModel : ViewModelBase
     private IReadOnlyList<ModInfo> _selectedMods = Array.Empty<ModInfo>();
     private bool _isUpdating;
     private int _updateCount;
+    private int _availableUpdateCount;
     private bool _showDetailDrawer;
     private ModSearcher.SearchRow? _detailMod;
     private bool _isImporting;
@@ -769,24 +770,33 @@ public sealed class ModsViewModel : ViewModelBase
         try
         {
             var mods = Services.Mods.ListMods(InstanceId);
-            int available = 0;
-            foreach (var mod in mods)
-            {
-                if (string.IsNullOrEmpty(mod.ProjectId) || string.IsNullOrEmpty(mod.VersionId))
-                    continue;
-                try
+            // Parallelise the per-mod Modrinth calls, but cap concurrency at
+            // 8 to stay under the public API rate limit (200 req/min).
+            using var gate = new SemaphoreSlim(8);
+            var tasks = mods
+                .Where(m => !string.IsNullOrEmpty(m.ProjectId) && !string.IsNullOrEmpty(m.VersionId))
+                .Select(async mod =>
                 {
-                    var versions = await Services.Modrinth.GetVersionsAsync(mod.ProjectId, Loader, GameVersion);
-                    var latest = versions.FirstOrDefault();
-                    mod.HasUpdate = latest is not null && latest.Id != mod.VersionId;
-                    if (mod.HasUpdate)
+                    await gate.WaitAsync();
+                    try
                     {
-                        mod.LatestVersionNumber = latest!.VersionNumber;
-                        available++;
+                        var versions = await Services.Modrinth.GetVersionsAsync(mod.ProjectId, Loader, GameVersion);
+                        var latest = versions.FirstOrDefault();
+                        mod.HasUpdate = latest is not null && latest.Id != mod.VersionId;
+                        if (mod.HasUpdate)
+                        {
+                            mod.LatestVersionNumber = latest!.VersionNumber;
+                            Interlocked.Increment(ref _availableUpdateCount);
+                        }
                     }
-                }
-                catch { /* skip mods whose metadata cannot be resolved */ }
-            }
+                    catch { /* skip mods whose metadata cannot be resolved */ }
+                    finally { gate.Release(); }
+                })
+                .ToList();
+
+            await Task.WhenAll(tasks);
+
+            var available = _availableUpdateCount;
             UpdateCount = available;
             Status = available == 0 ? "All mods are up to date." : $"{available} mod(s) have updates available.";
             Mods = mods;

@@ -22,6 +22,7 @@ public partial class SettingsPage : UserControl
         DownloadsSection.Visibility = key == "downloads" ? Visibility.Visible : Visibility.Collapsed;
         GeneralSection.Visibility = key == "general" ? Visibility.Visible : Visibility.Collapsed;
         AboutSection.Visibility = key == "about" ? Visibility.Visible : Visibility.Collapsed;
+        MaintenanceSection.Visibility = key == "maintenance" ? Visibility.Visible : Visibility.Collapsed;
         ContentScroller?.ScrollToTop();
     }
 }

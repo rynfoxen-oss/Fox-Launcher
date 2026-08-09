@@ -24,9 +24,13 @@ public sealed class CrashAnalyzer
 
             var lines = File.ReadAllLines(crashReportPath);
             var title = lines.FirstOrDefault(l => l.StartsWith("---- Minecraft Crash Report")) ?? "";
-            analysis.Title = title.Length > title.IndexOf("//", StringComparison.Ordinal)
-                ? title[(title.IndexOf("//", StringComparison.Ordinal) + 2)..].Trim()
-                : title;
+            // Older crash reports and some third-party mods omit the "//" separator
+            // after "Minecraft Crash Report". IndexOf returns -1 in that case;
+            // slicing with that offset would silently corrupt the title.
+            var titleSep = title.IndexOf("//", StringComparison.Ordinal);
+            analysis.Title = titleSep >= 0
+                ? title[(titleSep + 2)..].Trim()
+                : title.Trim();
 
             for (var i = 0; i < lines.Length; i++)
             {

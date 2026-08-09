@@ -19,7 +19,7 @@ public sealed class JavaLocatorService
     };
 
     /// <summary>Finds any Java runtime, preferring the given major version.</summary>
-    public JavaRuntime? FindJava(int? preferredMajor = null)
+    public async Task<JavaRuntime?> FindJavaAsync(int? preferredMajor = null)
     {
         var candidates = new List<JavaRuntime>();
 
@@ -29,7 +29,7 @@ public sealed class JavaLocatorService
             foreach (var dir in Directory.GetDirectories(Paths.Java))
             {
                 var java = Path.Combine(dir, "bin", "java.exe");
-                if (File.Exists(java)) candidates.Add(Probe(java));
+                if (File.Exists(java)) candidates.Add(await ProbeAsync(java));
             }
         }
 
@@ -38,13 +38,13 @@ public sealed class JavaLocatorService
         if (!string.IsNullOrEmpty(javaHome))
         {
             var java = Path.Combine(javaHome, "bin", "java.exe");
-            if (File.Exists(java)) candidates.Add(Probe(java));
+            if (File.Exists(java)) candidates.Add(await ProbeAsync(java));
         }
 
         // Registry
         if (OperatingSystem.IsWindows())
         {
-            candidates.AddRange(ProbeRegistry());
+            candidates.AddRange(await ProbeRegistryAsync());
         }
 
         // Common install directories
@@ -60,7 +60,7 @@ public sealed class JavaLocatorService
                 foreach (var dir in Directory.GetDirectories(vendorDir))
                 {
                     var java = Path.Combine(dir, "bin", "java.exe");
-                    if (File.Exists(java)) candidates.Add(Probe(java));
+                    if (File.Exists(java)) candidates.Add(await ProbeAsync(java));
                 }
             }
         }
@@ -70,7 +70,7 @@ public sealed class JavaLocatorService
         {
             if (string.IsNullOrWhiteSpace(dir)) continue;
             var java = Path.Combine(dir.Trim('"'), "java.exe");
-            if (File.Exists(java)) candidates.Add(Probe(java));
+            if (File.Exists(java)) candidates.Add(await ProbeAsync(java));
         }
 
         // Prefer a runtime matching the requested major version.
@@ -86,17 +86,17 @@ public sealed class JavaLocatorService
     }
 
     /// <summary>Finds the best Java for a specific Minecraft version.</summary>
-    public JavaRuntime? FindJavaForGame(string gameVersion, string? explicitPath = null, int? preferredMajor = null)
+    public async Task<JavaRuntime?> FindJavaForGameAsync(string gameVersion, string? explicitPath = null, int? preferredMajor = null)
     {
         if (!string.IsNullOrEmpty(explicitPath) && File.Exists(explicitPath))
         {
-            return Probe(explicitPath);
+            return await ProbeAsync(explicitPath);
         }
-        return FindJava(preferredMajor ?? JavaRequirements.ForGameVersion(gameVersion));
+        return await FindJavaAsync(preferredMajor ?? JavaRequirements.ForGameVersion(gameVersion));
     }
 
     [SupportedOSPlatform("windows")]
-    private static IEnumerable<JavaRuntime> ProbeRegistry()
+    private static async Task<List<JavaRuntime>> ProbeRegistryAsync()
     {
         var results = new List<JavaRuntime>();
         foreach (var root in RegistryRoots)
@@ -111,7 +111,7 @@ public sealed class JavaLocatorService
                     var home = sub?.GetValue("JavaHome") as string;
                     if (string.IsNullOrEmpty(home)) continue;
                     var java = Path.Combine(home, "bin", "java.exe");
-                    if (File.Exists(java)) results.Add(Probe(java));
+                    if (File.Exists(java)) results.Add(await ProbeAsync(java));
                 }
             }
             catch
@@ -122,9 +122,9 @@ public sealed class JavaLocatorService
         return results;
     }
 
-    private static JavaRuntime Probe(string javaExe)
+    private static async Task<JavaRuntime> ProbeAsync(string javaExe)
     {
-        var version = GetJavaMajor(javaExe);
+        var version = await GetJavaMajorAsync(javaExe);
         return new JavaRuntime
         {
             Path = javaExe,
@@ -133,11 +133,11 @@ public sealed class JavaLocatorService
     }
 
     /// <summary>Runs <c>java -version</c> and extracts the major version.</summary>
-    public static int GetJavaMajor(string javaExe)
+    public static async Task<int> GetJavaMajorAsync(string javaExe)
     {
         try
         {
-            var result = ProcessHelper.RunAsync(javaExe, "-version").GetAwaiter().GetResult();
+            var result = await ProcessHelper.RunAsync(javaExe, "-version");
             var output = result.StdErr + result.StdOut;
             // Examples: "1.8.0_361" => 8; "17.0.9" => 17; "21.0.1" => 21
             var match = System.Text.RegularExpressions.Regex.Match(output, "\"(\\d+)(?:\\.(\\d+))?");

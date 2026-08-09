@@ -28,19 +28,13 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
             var ex = (Exception)args.ExceptionObject;
-            File.AppendAllText(Path.Combine(Paths.Logs, "crash.log"),
-                $"===== UNHANDLED EXCEPTION at {DateTime.Now:yyyy-MM-dd HH:mm:ss} =====\n" +
-                $"{ex.GetType().Name}: {ex.Message}\n" +
-                $"Stack Trace:\n{ex.StackTrace}\n\n");
-            MessageBox.Show($"Unhandled exception: {ex.Message}\n\n{ex.StackTrace}", "FoxLauncher Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            LogCrash("UNHANDLED EXCEPTION", ex);
+            ShowFriendlyCrashDialog(ex);
         };
         DispatcherUnhandledException += (_, args) =>
         {
-            File.AppendAllText(Path.Combine(Paths.Logs, "crash.log"),
-                $"===== DISPATCHER EXCEPTION at {DateTime.Now:yyyy-MM-dd HH:mm:ss} =====\n" +
-                $"{args.Exception.GetType().Name}: {args.Exception.Message}\n" +
-                $"Stack Trace:\n{args.Exception.StackTrace}\n\n");
-            MessageBox.Show($"Unhandled exception: {args.Exception.Message}\n\n{args.Exception.StackTrace}", "FoxLauncher Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            LogCrash("DISPATCHER EXCEPTION", args.Exception);
+            ShowFriendlyCrashDialog(args.Exception);
             args.Handled = true;
         };
         TaskScheduler.UnobservedTaskException += (_, args) =>
@@ -86,15 +80,80 @@ public partial class App : Application
             ApplyTheme();
 
             RunStartupServices(hub);
+
+            // Non-fatal startup check: warn (once) if Microsoft login is not
+            // configured. Offline accounts still work; this only affects users
+            // who try to sign in with a Microsoft account.
+            if (hub.Settings.IsMicrosoftClientIdPlaceholder() || !hub.Settings.IsMicrosoftClientIdConfigured())
+            {
+                hub.Log.Warn("Microsoft client id is not configured. Microsoft login is disabled until MicrosoftClientId is set in settings.json.");
+            }
         }
         catch (Exception ex)
         {
-            File.AppendAllText(Path.Combine(Paths.Logs, "crash.log"),
-                $"===== STARTUP EXCEPTION at {DateTime.Now:yyyy-MM-dd HH:mm:ss} =====\n" +
-                $"{ex.GetType().Name}: {ex.Message}\n" +
-                $"Stack Trace:\n{ex.StackTrace}\n\n");
-            MessageBox.Show($"Startup failed: {ex.Message}\n\n{ex.StackTrace}", "FoxLauncher Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            LogCrash("STARTUP EXCEPTION", ex);
+            ShowFriendlyCrashDialog(ex, startup: true);
             Current.Shutdown();
+        }
+    }
+
+    /// <summary>
+    /// Writes full exception detail (including stack trace) to crash.log. The
+    /// user-facing dialog never shows the stack trace — see
+    /// <see cref="ShowFriendlyCrashDialog"/>.
+    /// </summary>
+    private static void LogCrash(string label, Exception ex)
+    {
+        try
+        {
+            // Drill into XamlParseException / TargetInvocationException wrappers to
+            // log the actual cause — the outer message is rarely useful.
+            Exception? current = ex;
+            var lines = new List<string>();
+            while (current is not null)
+            {
+                lines.Add($"-- {current.GetType().Name}: {current.Message}");
+                lines.Add(current.StackTrace ?? "");
+                current = current.InnerException;
+            }
+            File.AppendAllText(Path.Combine(Paths.Logs, "crash.log"),
+                $"===== {label} at {DateTime.Now:yyyy-MM-dd HH:mm:ss} =====\n" +
+                string.Join("\n", lines) + "\n\n");
+        }
+        catch { /* never fail on logging */ }
+    }
+
+    /// <summary>
+    /// Shows an end-user-friendly error dialog. Full detail is always in
+    /// crash.log; this dialog tells the user where to find it and offers a
+    /// one-click "Copy details" so they can paste it into a bug report.
+    /// </summary>
+    private static void ShowFriendlyCrashDialog(Exception ex, bool startup = false)
+    {
+        var prefix = startup ? "FoxLauncher failed to start." : "FoxLauncher hit an unexpected error.";
+        var logPath = Path.Combine(Paths.Logs, "crash.log");
+        var body = $"{prefix}\n\n" +
+                   $"Details: {ex.GetType().Name}: {ex.Message}\n\n" +
+                   $"The full error was saved to:\n{logPath}\n\n" +
+                   "If this keeps happening, please open a bug report and include the crash log.";
+
+        // Use the ownerless overload during startup — MainWindow is null until the
+        // first window has been created, and MessageBox.Show(Window, …) crashes if the
+        // owner is null. The ownerless variant works in every WPF state.
+        var owner = Instance?.MainWindow;
+        var result = owner is null
+            ? MessageBox.Show(body, "FoxLauncher error",
+                MessageBoxButton.OKCancel, MessageBoxImage.Error)
+            : MessageBox.Show(owner, body, "FoxLauncher error",
+                MessageBoxButton.OKCancel, MessageBoxImage.Error);
+
+        if (result == MessageBoxResult.Cancel)
+        {
+            try
+            {
+                Clipboard.SetText(File.Exists(logPath) ? File.ReadAllText(logPath) : $"{ex}");
+            }
+            catch { /* clipboard in use */ }
         }
     }
 
@@ -113,6 +172,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
+            LogCrash("UNINSTALLER MODE EXCEPTION", ex);
             MessageBox.Show($"The uninstaller could not start: {ex.Message}", "FoxLauncher",
                 MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown();
@@ -314,6 +374,7 @@ public partial class App : Application
             try { Clipboard.SetText(text); }
             catch { /* clipboard in use */ }
         };
+        hub.RequestExit = () => Dispatcher.Invoke(() => Shutdown());
 
         GlobalExceptionHandler.Unhandled += (ex, ctx) =>
         {
@@ -340,7 +401,25 @@ public partial class App : Application
             {
                 var info = await hub.Updater.CheckForUpdateAsync();
                 info ??= hub.Updater.FindPendingUpdate();
-                if (info is null || !hub.Settings.AutoUpdate) return;
+                if (info is null) return;
+
+                // Respect the user's earlier Skip / Remind choices.
+                var skipped = hub.Settings.SkippedUpdateVersions.Contains(info.LatestVersion);
+                var reminded = hub.Settings.RemindUpdateAfter is { } remind && DateTimeOffset.UtcNow < remind;
+
+                // Always surface the update in the UI (banner / status badge)
+                // so the user is aware of it even if they disabled auto-popups.
+                Dispatcher.Invoke(() =>
+                {
+                    var main = hub.Container.Resolve<MainViewModel>();
+                    main.PendingUpdate = info;
+                });
+
+                if (skipped || reminded) return;
+                if (!hub.Settings.AutoUpdate) return;
+
+                // Auto-popup is opt-in via AutoUpdate. Manual dismissals via the
+                // banner / dialog feed back into SkippedUpdateVersions.
                 Dispatcher.Invoke(() => hub.OpenUpdateDialog?.Invoke(info));
             }
             catch { /* update check is best-effort */ }
@@ -432,7 +511,12 @@ public partial class App : Application
     {
         try
         {
+            // Flush any pending debounced settings so the last slider value
+            // isn't lost on shutdown.
+            AppHost.Services?.Settings.FlushAsync();
+            AppHost.Services?.Settings.Dispose();
             AppHost.Services?.Discord.Dispose();
+            AppHost.Services?.Log.Dispose();
         }
         catch { /* shutdown cleanup */ }
         base.OnExit(e);

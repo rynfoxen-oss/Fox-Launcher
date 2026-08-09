@@ -12,6 +12,16 @@ namespace Launcher.Core;
 /// </summary>
 public static class ArgumentResolver
 {
+    // Cache the static JVM-arg prefix. The middle bits (memory, G1 flags,
+    // user-supplied args) and the version-specific tail all vary per launch
+    // — but the prefix is identical for every launch with the same option
+    // combo, which is almost always true. Cuts a few hundred list allocs
+    // per launch on hot paths.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, List<string>> _prefixCache = new();
+
+    private static string PrefixKey(LaunchOptions o)
+        => $"{o.MaxMemoryMb}|{o.MinMemoryMb}|{o.GcPauseMillis}|{o.AlwaysPreTouch}|{o.MultiCoreOptimization}|{o.BoostFps}|{o.JvmArguments}|{o.ShowFps}";
+
     /// <summary>
     /// Produces the argument list (without the java executable) to launch the game.
     /// </summary>
@@ -29,58 +39,8 @@ public static class ArgumentResolver
         var ctx = CreateContext(version, versionId, gameVersion, account, options, gameDir, assetsRoot, nativesDir, classpath);
         var args = new List<string>();
 
-        // JVM arguments
-        args.Add("-Xmx" + options.MaxMemoryMb + "M");
-        args.Add("-Xms" + options.MinMemoryMb + "M");
-        args.Add("-XX:+UseG1GC");
-        args.Add("-XX:+ParallelRefProcEnabled");
-        args.Add("-XX:MaxGCPauseMillis=" + Math.Clamp(options.GcPauseMillis, 10, 300));
-        if (options.AlwaysPreTouch)
-        {
-            args.Add("-XX:+AlwaysPreTouch");
-        }
-        args.Add("-XX:+DisableExplicitGC");
-
-        // Never let an unrecognized flag abort the game at startup.
-        args.Add("-XX:+IgnoreUnrecognizedVMOptions");
-
-        if (options.MultiCoreOptimization)
-        {
-            args.Add("-XX:+UseStringDeduplication");
-            args.Add("-XX:+OptimizeStringConcat");
-        }
-
-        // Low-latency G1 tuning used by popular third-party launchers. Oracle
-        // JDK builds treat G1NewSizePercent/G1MaxNewSizePercent as experimental,
-        // so the unlock flag must come first or the JVM refuses to start.
-        if (options.BoostFps)
-        {
-            args.Add("-XX:+UnlockExperimentalVMOptions");
-            args.Add("-XX:G1NewSizePercent=30");
-            args.Add("-XX:G1MaxNewSizePercent=40");
-            args.Add("-XX:G1HeapRegionSize=8M");
-            args.Add("-XX:G1ReservePercent=20");
-            args.Add("-XX:G1HeapWastePercent=5");
-            args.Add("-XX:G1MixedGCCountTarget=4");
-            args.Add("-XX:InitiatingHeapOccupancyPercent=15");
-            args.Add("-XX:SurvivorRatio=32");
-            args.Add("-XX:MaxTenuringThreshold=1");
-            args.Add("-XX:+PerfDisableSharedMem");
-        }
-
-        // User-supplied extra flags (split on spaces, respecting quotes).
-        if (!string.IsNullOrWhiteSpace(options.JvmArguments))
-        {
-            foreach (var token in SplitLegacyArguments(options.JvmArguments))
-            {
-                args.Add(token);
-            }
-        }
-
-        if (options.ShowFps)
-        {
-            args.Add("-Dfml.debug.launch=false");
-        }
+        // JVM arguments (cached)
+        args.AddRange(GetOrBuildJvmPrefix(options));
 
         if (version.Arguments?.Jvm is { } jvm)
         {
@@ -135,6 +95,65 @@ public static class ArgumentResolver
         }
 
         return args;
+    }
+
+    private static List<string> GetOrBuildJvmPrefix(LaunchOptions options)
+    {
+        var key = PrefixKey(options);
+        if (_prefixCache.TryGetValue(key, out var cached)) return cached;
+
+        var prefix = new List<string>
+        {
+            "-Xmx" + options.MaxMemoryMb + "M",
+            "-Xms" + options.MinMemoryMb + "M",
+            "-XX:+UseG1GC",
+            "-XX:+ParallelRefProcEnabled",
+            "-XX:MaxGCPauseMillis=" + Math.Clamp(options.GcPauseMillis, 10, 300),
+        };
+        if (options.AlwaysPreTouch) prefix.Add("-XX:+AlwaysPreTouch");
+        prefix.Add("-XX:+DisableExplicitGC");
+        // Never let an unrecognized flag abort the game at startup.
+        prefix.Add("-XX:+IgnoreUnrecognizedVMOptions");
+
+        if (options.MultiCoreOptimization)
+        {
+            prefix.Add("-XX:+UseStringDeduplication");
+            prefix.Add("-XX:+OptimizeStringConcat");
+        }
+
+        // Low-latency G1 tuning used by popular third-party launchers. Oracle
+        // JDK builds treat G1NewSizePercent/G1MaxNewSizePercent as experimental,
+        // so the unlock flag must come first or the JVM refuses to start.
+        if (options.BoostFps)
+        {
+            prefix.Add("-XX:+UnlockExperimentalVMOptions");
+            prefix.Add("-XX:G1NewSizePercent=30");
+            prefix.Add("-XX:G1MaxNewSizePercent=40");
+            prefix.Add("-XX:G1HeapRegionSize=8M");
+            prefix.Add("-XX:G1ReservePercent=20");
+            prefix.Add("-XX:G1HeapWastePercent=5");
+            prefix.Add("-XX:G1MixedGCCountTarget=4");
+            prefix.Add("-XX:InitiatingHeapOccupancyPercent=15");
+            prefix.Add("-XX:SurvivorRatio=32");
+            prefix.Add("-XX:MaxTenuringThreshold=1");
+            prefix.Add("-XX:+PerfDisableSharedMem");
+        }
+
+        // User-supplied extra flags (split on spaces, respecting quotes).
+        if (!string.IsNullOrWhiteSpace(options.JvmArguments))
+        {
+            foreach (var token in SplitLegacyArguments(options.JvmArguments))
+            {
+                prefix.Add(token);
+            }
+        }
+
+        if (options.ShowFps)
+        {
+            prefix.Add("-Dfml.debug.launch=false");
+        }
+
+        return _prefixCache[key] = prefix;
     }
 
     private static LaunchContext CreateContext(

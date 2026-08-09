@@ -4,6 +4,34 @@ All notable changes to FoxLauncher are documented in this file.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and uses [Semantic Versioning](https://semver.org/).
 
+## [1.0.3] - 2026-08-09
+### Fixed
+- Auto-update no longer reports "Download failed" on release builds. GitHub reports asset digests as `sha256:<hex>`, but the launcher compared them against a plain hex hash, so SHA-256 verification always failed once a release carried a digest. The algorithm prefix is now stripped (in both the GitHub API mapping and the downloader), so older builds can finally install updates.
+- Update downloads now stream to disk instead of buffering the whole ~160 MB binary in memory and are no longer cut off by the 60-second HTTP timeout, so large releases download reliably on slower connections. A transient truncation or connection blip is retried automatically.
+- The update dialog now shows live progress (bytes downloaded, total size, and transfer speed) instead of an indeterminate bar.
+- If an automatic download or apply fails, the update dialog offers a "Download manually from the release page" button as an escape hatch.
+- The updated launcher relaunches with its window visible instead of hidden after a successful update.
+- A failed download attempt no longer dismisses the update banner; the update stays available so you can retry.
+- Leftover update binaries from older versions in the temp folder are cleaned up after a successful download.
+- Crash log writing no longer throws a nullability warning when an exception has no inner exception.
+
+
+## [1.0.2] - 2026-08-08
+### Changed
+- Compact Settings navigation so Maintenance is visible at normal window sizes.
+- Improved the Mods page layout so the installed mods list and Browse Modrinth browser use the available window height instead of requiring fullscreen.
+
+## [1.0.1] - 2026-08-07
+### Fixed
+- Crash analyzer no longer truncates the title of crash reports that do not contain the `//` separator (older Forge reports and third-party crash reports).
+- Microsoft login no longer hangs forever when the device code never completes; the polling loop now honours `deviceCode.ExpiresIn` and treats `access_denied` as a terminal error.
+- Settings sliders (memory, music volume, GC pause time, download threads) no longer rewrite the entire settings JSON on every drag tick; writes are debounced to 500 ms and flushed on shutdown.
+- The unhandled-exception dialog no longer shows a raw C# stack trace to end users; it points at `crash.log` and offers a "Copy details" button so users can paste the full report into a bug ticket.
+- Deleted leftover `Program.cs.bak` / `ModManagerService.cs.bak` files that were being shipped inside the single-file publish.
+
+### Changed
+- Build artifacts are signed with the local dev certificate (`CN=FoxLauncher Dev`) so the launcher and installer no longer appear as "unsigned" to AV / Defender.
+
 ## [1.0.0] - 2026-08-07
 ### Changed
 - Reset all previous pre-release versions. From now on 1.0.0 is the first official release, and every launcher on an older version updates to it automatically.

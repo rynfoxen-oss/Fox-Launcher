@@ -18,45 +18,86 @@ internal static class InstallerCore
         "FoxLauncher");
 
     /// <summary>
-    /// Extracts the embedded launcher to a temporary file so it can be copied
-    /// into the install directory. Returns null when the launcher was not
-    /// embedded (e.g. the installer was built without running build.ps1).
+    /// Progress callback used by the graphical installer. <see cref="Phase"/> is a
+    /// short phase label; <see cref="BytesDone"/> and <see cref="BytesTotal"/>
+    /// are the current/total for the file-copy phase (both 0 outside of the
+    /// copy). Called from a worker thread.
     /// </summary>
-    public static string? ExtractEmbeddedLauncher()
+    public readonly struct Progress
     {
-        var assembly = Assembly.GetExecutingAssembly();
-        using var stream = assembly.GetManifestResourceStream(ResourceName);
-        if (stream is null) return null;
+        public Progress(string phase, long bytesDone, long bytesTotal)
+        {
+            Phase = phase;
+            BytesDone = bytesDone;
+            BytesTotal = bytesTotal;
+        }
+        public string Phase { get; }
+        public long BytesDone { get; }
+        public long BytesTotal { get; }
+    }
 
-        var temp = Path.Combine(Path.GetTempPath(), $"FoxLauncher-embedded-{Guid.NewGuid():N}.exe");
-        using var file = File.Create(temp);
-        stream.CopyTo(file);
-        return temp;
+    /// <summary>
+    /// Optional selections from the installer's Components step. Persisted to
+    /// <c>components.json</c> next to the launcher exe so the launcher can read
+    /// them on first run and apply defaults. Tolerant of null (legacy callers).
+    /// </summary>
+    public sealed class ComponentChoices
+    {
+        public bool ModManager { get; init; } = true;
+        public bool SkinPreview { get; init; }
+        public bool DiscordRichPresence { get; init; } = true;
     }
 
     /// <summary>
     /// Installs FoxLauncher into <paramref name="installDir"/>. When
     /// <paramref name="portable"/> is true the launcher runs in portable mode
-    /// (no shortcuts, no uninstall entry). Returns null on success, otherwise an
-    /// error message.
+    /// (no shortcuts, no uninstall entry). When <paramref name="components"/>
+    /// is non-null the selections are written to <c>components.json</c>.
+    /// Returns null on success, otherwise an error message.
     /// </summary>
-    public static string? Install(string installDir, bool portable, Action<string>? status = null)
+    public static string? Install(
+        string installDir,
+        bool portable,
+        Action<string>? status = null,
+        ComponentChoices? components = null,
+        Action<Progress>? progress = null)
     {
         try
         {
             status?.Invoke("Preparing installation...");
-            var embedded = ExtractEmbeddedLauncher();
-            if (embedded is null)
+            progress?.Invoke(new Progress("Preparing", 0, 0));
+
+            Directory.CreateDirectory(installDir);
+            var targetExe = Path.Combine(installDir, "FoxLauncher.exe");
+
+            // Reinstalling over a running copy of FoxLauncher fails because the
+            // executable is locked, so close any instance running from the target
+            // path before we try to replace it.
+            TryCloseRunningLauncher(targetExe, status);
+
+            // Copy the embedded launcher straight into the install dir with
+            // per-chunk progress so the user always sees the bar moving — a
+            // silent multi-second phase would look like a freeze. The payload is
+            // written to a .new file and renamed into place atomically.
+            var assembly = Assembly.GetExecutingAssembly();
+            using var stream = assembly.GetManifestResourceStream(ResourceName);
+            if (stream is null)
             {
                 return "The launcher executable was not embedded in the installer.\n" +
                        "Run build.ps1 to produce the bundled installer.";
             }
 
-            Directory.CreateDirectory(installDir);
-
             status?.Invoke("Extracting FoxLauncher...");
-            var targetExe = Path.Combine(installDir, "FoxLauncher.exe");
-            File.Copy(embedded, targetExe, overwrite: true);
+            ExtractWithProgress(stream, targetExe, progress);
+
+            // The file lands on disk via a temp-file + rename; verify the result
+            // matches the embedded payload so a partial write is never reported
+            // as a successful install.
+            if (!File.Exists(targetExe) || new FileInfo(targetExe).Length != stream.Length)
+            {
+                return "Installation failed: the extracted launcher does not match the installer payload.";
+            }
+
             if (portable)
             {
                 File.WriteAllText(Path.Combine(installDir, "portable.txt"), "");
@@ -64,6 +105,7 @@ internal static class InstallerCore
             else
             {
                 status?.Invoke("Creating shortcuts...");
+                progress?.Invoke(new Progress("Shortcuts", 0, 0));
                 CreateShortcut(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "FoxLauncher.lnk"), targetExe);
                 var menu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "FoxLauncher");
                 Directory.CreateDirectory(menu);
@@ -74,12 +116,139 @@ internal static class InstallerCore
                 WriteUninstallScript(installDir);
             }
 
+            // Persist component choices for the launcher to read on first run.
+            if (components is not null)
+            {
+                try
+                {
+                    var json = System.Text.Json.JsonSerializer.Serialize(components);
+                    File.WriteAllText(Path.Combine(installDir, "components.json"), json);
+                }
+                catch
+                {
+                    // Optional: don't fail install if components.json can't be written.
+                }
+            }
+
             status?.Invoke("Installation complete.");
+            progress?.Invoke(new Progress("Done", 1, 1));
             return null;
         }
         catch (Exception ex)
         {
             return $"Installation failed: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Streams the embedded launcher (<paramref name="source"/>) to
+    /// <paramref name="destination"/> with per-chunk progress callbacks,
+    /// throttled so the UI thread isn't woken more than ~20 times per second.
+    /// The data is written to a temp file next to the destination and moved
+    /// into place afterwards, so a half-written executable never appears at the
+    /// final path and transient locks (e.g. antivirus scanning) are retried
+    /// instead of failing the install.
+    /// </summary>
+    private static void ExtractWithProgress(Stream source, string destination, Action<Progress>? progress)
+    {
+        long total;
+        try { total = source.Length; }
+        catch { total = -1; }
+
+        const int bufferSize = 128 * 1024;
+        var buffer = new byte[bufferSize];
+        long done = 0;
+        var lastReport = DateTime.UtcNow;
+
+        var temp = destination + ".new";
+        try
+        {
+            using (var dst = File.Create(temp))
+            {
+                int read;
+                while ((read = source.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    dst.Write(buffer, 0, read);
+                    done += read;
+                    var now = DateTime.UtcNow;
+                    if (progress is not null && total > 0 && (now - lastReport).TotalMilliseconds >= 50)
+                    {
+                        progress?.Invoke(new Progress("Extracting", done, total));
+                        lastReport = now;
+                    }
+                }
+                dst.Flush(flushToDisk: true);
+            }
+            progress?.Invoke(new Progress("Extracting", done, total > 0 ? total : done));
+
+            var attempts = 0;
+            while (true)
+            {
+                try
+                {
+                    File.Move(temp, destination, overwrite: true);
+                    return;
+                }
+                catch (IOException)
+                {
+                    if (++attempts >= 10) throw;
+                    Thread.Sleep(200);
+                }
+            }
+        }
+        finally
+        {
+            TryDelete(temp);
+        }
+    }
+
+    /// <summary>
+    /// Terminates any running FoxLauncher that is executing from
+    /// <paramref name="targetExe"/>. Overwriting a running copy fails with a
+    /// file-in-use error, so the installer closes the app first. Only processes
+    /// that resolve to the exact target path are killed; a launcher running from
+    /// somewhere else (e.g. a different portable copy) is left alone.
+    /// </summary>
+    private static void TryCloseRunningLauncher(string targetExe, Action<string>? status)
+    {
+        var target = Path.GetFullPath(targetExe);
+        var upgradingExisting = File.Exists(target);
+        var closedAny = false;
+
+        foreach (var process in Process.GetProcessesByName("FoxLauncher"))
+        {
+            try
+            {
+                var runningFrom = process.MainModule?.FileName;
+                if (runningFrom is not null &&
+                    string.Equals(Path.GetFullPath(runningFrom), target, StringComparison.OrdinalIgnoreCase))
+                {
+                    process.Kill();
+                    closedAny = true;
+                }
+                else if (runningFrom is null && upgradingExisting)
+                {
+                    // The process path is not readable (e.g. different elevation).
+                    // Only fall back to a name-based kill when replacing an
+                    // existing install so we never touch unrelated copies.
+                    process.Kill();
+                    closedAny = true;
+                }
+            }
+            catch
+            {
+                // Skip processes that already exited or cannot be terminated.
+            }
+            finally
+            {
+                process.Dispose();
+            }
+        }
+
+        if (closedAny)
+        {
+            status?.Invoke("Closing the running launcher...");
+            Thread.Sleep(500);
         }
     }
 
@@ -89,7 +258,8 @@ internal static class InstallerCore
         {
             FileName = exePath,
             WorkingDirectory = workingDirectory,
-            UseShellExecute = true
+            UseShellExecute = true,
+            Verb = "open"
         };
         try
         {
@@ -251,5 +421,5 @@ internal static class InstallerCore
 internal static class InstallerInfo
 {
     /// <summary>Launcher version shown in the uninstall registry entry.</summary>
-    public const string Version = "1.0.0";
+    public const string Version = "1.0.3";
 }

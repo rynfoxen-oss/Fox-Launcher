@@ -42,6 +42,19 @@ public sealed class AppSettings
     /// <summary>Automatically check for and install updates.</summary>
     public bool AutoUpdate { get; set; } = true;
 
+    /// <summary>Versions the user has explicitly skipped. Never auto-prompted for these again.</summary>
+    public List<string> SkippedUpdateVersions { get; set; } = new();
+
+    /// <summary>UTC timestamp after which a postponed update can re-prompt the user.</summary>
+    public DateTimeOffset? RemindUpdateAfter { get; set; }
+
+    /// <summary>
+    /// When true, the launcher writes the full classpath + extra debug lines
+    /// to launcher.log. Off by default because a single launch emits ~3 MB
+    /// of classpath text otherwise.
+    /// </summary>
+    public bool VerboseLogging { get; set; }
+
     /// <summary>Play the built-in background music.</summary>
     public bool BackgroundMusic { get; set; } = true;
 

@@ -86,4 +86,8 @@ public sealed class ServiceHub
 
     /// <summary>Copies text to the clipboard (wired by the UI layer).</summary>
     public static Action<string>? ClipboardSetter { get; set; }
+
+    /// <summary>Requests the UI to shut the launcher down. Wired by App.xaml.cs to
+    /// <c>Application.Current.Shutdown()</c>.</summary>
+    public Action? RequestExit { get; set; }
 }

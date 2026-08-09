@@ -167,7 +167,7 @@ public sealed class DownloadManager
         var partial = destination + ".part";
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
 
-        var attempts = 0;
+        var rangeAttempts = 0;
         while (true)
         {
             var resumeOffset = 0L;
@@ -187,13 +187,25 @@ public sealed class DownloadManager
             }
 
             using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-            if ((int)response.StatusCode == 416 && resumeOffset > 0 && attempts < 1)
+            if ((int)response.StatusCode == 416 && resumeOffset > 0 && rangeAttempts < 1)
             {
                 // Stale/corrupt partial file is larger than the server's current file
                 // (or the server no longer supports ranges): discard it and start over.
-                attempts++;
+                // We give the inner loop exactly one chance to do this itself; if the
+                // server returns 416 *again* we throw so the outer DownloadFileAsync
+                // retry loop can apply proper backoff (otherwise a flaky CDN would
+                // silently truncate the file).
+                rangeAttempts++;
                 File.Delete(partial);
                 continue;
+            }
+            if ((int)response.StatusCode == 416 && resumeOffset > 0)
+            {
+                File.Delete(partial);
+                throw new HttpRequestException(
+                    "Server repeatedly rejected the resume range; partial file discarded.",
+                    inner: null,
+                    statusCode: System.Net.HttpStatusCode.RequestedRangeNotSatisfiable);
             }
             response.EnsureSuccessStatusCode();
 

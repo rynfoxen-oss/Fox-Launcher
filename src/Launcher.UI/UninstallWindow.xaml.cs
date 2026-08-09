@@ -29,8 +29,12 @@ public partial class UninstallWindow : Window
     private void OnDeleteDataChanged(object sender, RoutedEventArgs e)
     {
         var delete = DeleteDataCheck.IsChecked == true;
-        WarningCard.Visibility = delete ? Visibility.Visible : Visibility.Collapsed;
-        KeepDataNote.Visibility = delete ? Visibility.Collapsed : Visibility.Visible;
+        // This handler fires during InitializeComponent, before the elements
+        // declared later in the XAML have been created, so guard against null.
+        if (WarningCard is not null)
+            WarningCard.Visibility = delete ? Visibility.Visible : Visibility.Collapsed;
+        if (KeepDataNote is not null)
+            KeepDataNote.Visibility = delete ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private async void OnUninstallClick(object sender, RoutedEventArgs e)

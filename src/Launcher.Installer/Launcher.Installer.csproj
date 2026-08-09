@@ -15,8 +15,8 @@
     <ApplicationIcon>..\..\assets\icons\fox.ico</ApplicationIcon>
     <AssemblyTitle>FoxLauncher Installer</AssemblyTitle>
     <Product>FoxLauncher</Product>
-    <Version>1.0.0</Version>
-    <Description>FoxLauncher 1.0.0 installer with a graphical setup wizard.</Description>
+    <Version>1.0.3</Version>
+    <Description>FoxLauncher 1.0.3 installer with reliable auto-updates.</Description>
   </PropertyGroup>
 
   <!-- The single-file published launcher is embedded as a resource by build.ps1 -->
@@ -26,6 +26,7 @@
                       Condition="Exists('..\..\artifacts\publish\FoxLauncher.exe')" />
     <Resource Include="..\..\assets\icons\fox.ico"
               Link="Assets\fox.ico" />
+    <None Include="..\..\assets\license.txt" CopyToOutputDirectory="PreserveNewest" Link="assets\license.txt" />
   </ItemGroup>
 
 </Project>

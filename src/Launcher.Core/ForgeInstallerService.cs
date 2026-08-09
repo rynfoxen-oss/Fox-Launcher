@@ -89,7 +89,7 @@ public sealed class ForgeInstallerService
     {
         // Resolve java (installer requires the java version for the game).
         var javaMajor = JavaRequirements.ForLoaderInstaller(gameVersion);
-        var javaPath = _java.FindJava(javaMajor)?.Path;
+        var javaPath = (await _java.FindJavaAsync(javaMajor))?.Path;
         if (string.IsNullOrEmpty(javaPath))
         {
             progress?.Report(new InstallProgress { Stage = $"Installing Java {javaMajor} for {label} installer...", Fraction = 0.25 });

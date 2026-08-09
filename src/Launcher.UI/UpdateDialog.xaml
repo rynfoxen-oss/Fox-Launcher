@@ -64,6 +64,10 @@
                          IsIndeterminate="True" Visibility="Collapsed"/>
             <TextBlock x:Name="StatusText" Style="{StaticResource SecondaryText}" Margin="0,8,0,0"
                        TextWrapping="Wrap"/>
+            <Button x:Name="ManualButton" Content="Download manually from the release page"
+                    Style="{StaticResource GhostButton}" HorizontalAlignment="Left"
+                    Padding="12,6" Margin="0,8,0,0" Visibility="Collapsed"
+                    Click="OnManualDownloadClick"/>
         </StackPanel>
 
         <!-- Footer -->
@@ -74,8 +78,14 @@
             </Grid.ColumnDefinitions>
             <TextBlock x:Name="FooterHint" Text="The launcher will close and restart automatically after a successful update."
                        Style="{StaticResource CaptionText}" VerticalAlignment="Center" TextWrapping="Wrap"/>
-            <Button x:Name="NotNowButton" Grid.Column="1" Content="Close" Style="{StaticResource GhostButton}"
-                    MinWidth="90" IsCancel="True" Margin="0,0,10,0" Click="OnCloseClick"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button x:Name="SkipButton" Content="Skip this version" Style="{StaticResource GhostButton}"
+                        MinWidth="120" Margin="0,0,8,0" Click="OnSkipClick"/>
+                <Button x:Name="RemindButton" Content="Remind me in 1 hour" Style="{StaticResource GhostButton}"
+                        MinWidth="140" Margin="0,0,8,0" Click="OnRemindLaterClick"/>
+                <Button x:Name="NotNowButton" Content="Close" Style="{StaticResource GhostButton}"
+                        MinWidth="90" IsCancel="True" Click="OnCloseClick"/>
+            </StackPanel>
         </Grid>
     </Grid>
 </Window>

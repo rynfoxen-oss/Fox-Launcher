@@ -138,6 +138,57 @@
         </Setter>
     </Style>
 
+    <!-- ============ Danger ghost button (for destructive actions) ============ -->
+    <Style x:Key="DangerGhostButton" TargetType="Button" BasedOn="{StaticResource GhostButton}">
+        <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="White"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- ============ Filled danger button (used for Uninstall) ============ -->
+    <Style x:Key="DangerButton" TargetType="Button">
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="18,10"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="MinHeight" Value="42"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{DynamicResource ButtonRadius}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          Margin="{TemplateBinding Padding}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource DangerLightBrush}"/>
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource DangerLightBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource DangerDarkBrush}"/>
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource DangerDarkBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.55"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource GhostButton}">
         <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
@@ -173,12 +224,6 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
-    </Style>
-
-    <!-- ============ Danger button ============ -->
-    <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource GhostButton}">
-        <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
-        <Setter Property="BorderBrush" Value="#55E0554E"/>
     </Style>
 
     <!-- ============ TextBox ============ -->
@@ -295,42 +340,64 @@
 
     <!-- ============ Slider ============ -->
     <Style x:Key="AccentSlider" TargetType="Slider">
-        <Setter Property="Height" Value="28"/>
+        <Setter Property="Height" Value="34"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Slider">
-                    <Grid>
-                        <Track x:Name="PART_Track" VerticalAlignment="Center" Height="6">
+                    <Grid x:Name="Root">
+                        <Track x:Name="PART_Track" VerticalAlignment="Center" Height="20" Margin="12,0">
                             <Track.DecreaseRepeatButton>
-                                <RepeatButton Command="Slider.DecreaseLarge" Background="{DynamicResource AccentBrush}">
+                                <RepeatButton Command="Slider.DecreaseLarge" Focusable="False">
                                     <RepeatButton.Template>
                                         <ControlTemplate TargetType="RepeatButton">
-                                            <Border Background="{TemplateBinding Background}" CornerRadius="3"/>
+                                            <Grid Background="Transparent">
+                                                <Border Background="{DynamicResource AccentBrush}" Height="6" CornerRadius="3" VerticalAlignment="Center"/>
+                                            </Grid>
                                         </ControlTemplate>
                                     </RepeatButton.Template>
                                 </RepeatButton>
                             </Track.DecreaseRepeatButton>
                             <Track.IncreaseRepeatButton>
-                                <RepeatButton Command="Slider.IncreaseLarge" Background="{DynamicResource SurfaceHoverBrush}">
+                                <RepeatButton Command="Slider.IncreaseLarge" Focusable="False">
                                     <RepeatButton.Template>
                                         <ControlTemplate TargetType="RepeatButton">
-                                            <Border Background="{TemplateBinding Background}" CornerRadius="3"/>
+                                            <Grid Background="Transparent">
+                                                <Border Background="{DynamicResource SurfaceHoverBrush}" Height="6" CornerRadius="3" VerticalAlignment="Center"/>
+                                            </Grid>
                                         </ControlTemplate>
                                     </RepeatButton.Template>
                                 </RepeatButton>
                             </Track.IncreaseRepeatButton>
                             <Track.Thumb>
-                                <Thumb Width="18" Height="18">
+                                <Thumb Width="18" Height="18" Cursor="Hand">
                                     <Thumb.Template>
                                         <ControlTemplate TargetType="Thumb">
-                                            <Ellipse Fill="{DynamicResource AccentLightBrush}"
-                                                     Stroke="{DynamicResource AccentBrush}" StrokeThickness="2"/>
+                                            <Ellipse x:Name="Knob" Fill="{DynamicResource TextPrimary}"
+                                                     Stroke="{DynamicResource AccentBrush}" StrokeThickness="2">
+                                                <Ellipse.Effect>
+                                                    <DropShadowEffect BlurRadius="6" ShadowDepth="1" Opacity="0.45"/>
+                                                </Ellipse.Effect>
+                                            </Ellipse>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Knob" Property="Fill" Value="{DynamicResource AccentLightBrush}"/>
+                                                </Trigger>
+                                                <Trigger Property="IsDragging" Value="True">
+                                                    <Setter TargetName="Knob" Property="Fill" Value="{DynamicResource AccentLightBrush}"/>
+                                                    <Setter TargetName="Knob" Property="Stroke" Value="{DynamicResource AccentBrush}"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
                                         </ControlTemplate>
                                     </Thumb.Template>
                                 </Thumb>
                             </Track.Thumb>
                         </Track>
                     </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Root" Property="Opacity" Value="0.45"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

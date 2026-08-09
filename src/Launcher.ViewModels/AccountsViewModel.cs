@@ -137,7 +137,7 @@ public sealed class AccountsViewModel : ViewModelBase
         try
         {
             var clientId = Services.Settings.MicrosoftClientId;
-            if (string.IsNullOrWhiteSpace(clientId) || clientId.Contains("replace", StringComparison.OrdinalIgnoreCase))
+            if (Services.Settings.IsMicrosoftClientIdPlaceholder() || !Services.Settings.IsMicrosoftClientIdConfigured())
             {
                 Status = "Microsoft login is not configured. Set the Azure client id in settings.json, or use an offline profile.";
                 Services.Log.Warn("Microsoft client id not configured.");

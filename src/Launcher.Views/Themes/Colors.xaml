@@ -25,6 +25,8 @@
 
     <!-- Semantic -->
     <SolidColorBrush x:Key="DangerBrush" Color="#FFE0554E"/>
+    <SolidColorBrush x:Key="DangerLightBrush" Color="#FFE97770"/>
+    <SolidColorBrush x:Key="DangerDarkBrush" Color="#FFB43B36"/>
     <SolidColorBrush x:Key="SuccessBrush" Color="#FF57C785"/>
     <SolidColorBrush x:Key="WarningBrush" Color="#FFE0B64E"/>
     <SolidColorBrush x:Key="InfoBrush" Color="#FF4E9BE0"/>

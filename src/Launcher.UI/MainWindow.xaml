@@ -9,7 +9,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="FoxLauncher"
-        Width="1180" Height="760" MinWidth="980" MinHeight="620"
+        Width="1180" Height="760" MinWidth="920" MinHeight="580"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource WindowBackground}"
         WindowStyle="None" ResizeMode="CanResize">
@@ -73,7 +73,7 @@
                 <Image Source="pack://application:,,,/assets/icons/fox.ico" Width="18" Height="18"/>
                 <StackPanel Margin="8,0,0,0">
                     <TextBlock Text="FoxLauncher" Style="{StaticResource SectionTitleText}"/>
-                    <TextBlock Text="{Binding AppVersion, FallbackValue='v1.0.0'}" Style="{StaticResource CaptionText}"/>
+                    <TextBlock Text="{Binding AppVersion}" Style="{StaticResource CaptionText}"/>
                 </StackPanel>
             </StackPanel>
             <TextBlock Grid.Column="1" Text="{Binding Status}" Style="{StaticResource CaptionText}"

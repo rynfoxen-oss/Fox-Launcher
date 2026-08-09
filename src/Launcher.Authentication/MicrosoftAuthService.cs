@@ -51,10 +51,20 @@ public sealed class MicrosoftAuthService
         Action<DeviceCodePollStatus>? onStatus = null,
         CancellationToken ct = default)
     {
+        // Microsoft device codes expire (typically 900s). Track a wall-clock deadline
+        // so a stuck/unknown code can't hang the UI forever.
+        var pollInterval = TimeSpan.FromSeconds(deviceCode.Interval > 0 ? deviceCode.Interval : 5);
+        var expiresAt = DateTimeOffset.UtcNow.AddSeconds(deviceCode.ExpiresIn > 0 ? deviceCode.ExpiresIn : 900);
+
         while (true)
         {
             ct.ThrowIfCancellationRequested();
-            await Task.Delay(TimeSpan.FromSeconds(deviceCode.Interval > 0 ? deviceCode.Interval : 5), ct);
+            if (DateTimeOffset.UtcNow >= expiresAt)
+            {
+                throw new TimeoutException(
+                    "The login link has expired. Restart the Microsoft login to get a new code.");
+            }
+            await Task.Delay(pollInterval, ct);
 
             var form = new Dictionary<string, string>
             {
@@ -92,6 +102,7 @@ public sealed class MicrosoftAuthService
                     await Task.Delay(TimeSpan.FromSeconds(5), ct);
                     continue;
                 case "authorization_declined":
+                case "access_denied":
                     throw new InvalidOperationException("Authorization was declined.");
                 case "expired_token":
                 case "bad_verification_code":

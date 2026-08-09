@@ -25,6 +25,7 @@ public sealed class MainViewModel : ViewModelBase
     private string _status = "Ready";
     private bool _isPlaying;
     private bool _isSidebarCollapsed;
+    private UpdateInfo? _pendingUpdate;
     private readonly LogService _log;
 
     public MainViewModel(ServiceHub services, HomeViewModel home) : base(services)
@@ -55,6 +56,17 @@ public sealed class MainViewModel : ViewModelBase
         NavigateInstancesCommand = new RelayCommand(() => Navigate<InstancesViewModel>());
         NavigateAccountsCommand = new RelayCommand(NavigateAccounts);
         ToggleSidebarCommand = new RelayCommand(() => IsSidebarCollapsed = !IsSidebarCollapsed);
+
+        // Surface any pending update so the Home page can show a banner and the
+        // status bar can show a dot. The check itself runs once on startup from
+        // App.xaml.cs \u2014 this property just mirrors the result.
+        OpenUpdateCommand = new RelayCommand(() =>
+        {
+            if (_pendingUpdate is { } u)
+            {
+                Services.OpenUpdateDialog?.Invoke(u);
+            }
+        });
 
         services.Accounts.Changed += RefreshAccounts;
         services.Instances.Changed += () =>
@@ -102,6 +114,9 @@ public sealed class MainViewModel : ViewModelBase
     public RelayCommand NavigateInstancesCommand { get; }
     public RelayCommand NavigateAccountsCommand { get; }
     public RelayCommand ToggleSidebarCommand { get; }
+
+    /// <summary>Open the update dialog for the currently-pending release.</summary>
+    public RelayCommand OpenUpdateCommand { get; }
 
     public ViewModelBase CurrentPage
     {
@@ -159,6 +174,9 @@ public sealed class MainViewModel : ViewModelBase
         set => SetProperty(ref _status, value);
     }
 
+    /// <summary>Version of the running launcher. Bound in the title bar.</summary>
+    public string AppVersion => "v" + AppInfo.Version;
+
     public bool IsPlaying
     {
         get => _isPlaying;
@@ -183,6 +201,28 @@ public sealed class MainViewModel : ViewModelBase
     public bool HasCrashReport => !string.IsNullOrEmpty(LastCrashReportPath);
 
     public RelayCommand OpenCrashReportCommand { get; }
+
+    /// <summary>
+    /// Latest available update info from GitHub (or from a previously-downloaded
+    /// but not-yet-applied update). Null when the running version is current.
+    /// The Home page banner and the Settings nav dot bind to this.
+    /// </summary>
+    public UpdateInfo? PendingUpdate
+    {
+        get => _pendingUpdate;
+        set
+        {
+            if (SetProperty(ref _pendingUpdate, value))
+            {
+                OnPropertyChanged(nameof(HasPendingUpdate));
+                OnPropertyChanged(nameof(PendingUpdateVersion));
+            }
+        }
+    }
+
+    public bool HasPendingUpdate => _pendingUpdate is not null;
+
+    public string? PendingUpdateVersion => _pendingUpdate?.LatestVersion;
 
     private void OpenCrashReport()
     {

@@ -76,10 +76,26 @@ public sealed class ModrinthApi
             _ => null
         };
 
-        var url = $"{Api}/project/{Uri.EscapeDataString(projectId)}/version";
+        // Pass loaders= and game_versions= to Modrinth so the response is
+        // already filtered server-side. Without these, a popular project can
+        // return hundreds of versions and we throw away most of them.
+        var query = new List<string>();
+        if (!string.IsNullOrEmpty(loaders))
+        {
+            query.Add($"loaders={Uri.EscapeDataString($"[\"{loaders}\"]")}");
+        }
+        if (!string.IsNullOrEmpty(gameVersion))
+        {
+            query.Add($"game_versions={Uri.EscapeDataString($"[\"{gameVersion}\"]")}");
+        }
+        var qs = query.Count > 0 ? "?" + string.Join("&", query) : "";
+        var url = $"{Api}/project/{Uri.EscapeDataString(projectId)}/version{qs}";
         var raw = await _http.GetStringAsync(url, ct);
         var versions = Json.DeserializeApi<List<ModrinthVersion>>(raw) ?? new();
 
+        // Keep the client-side filter as a safety net (some servers still
+        // return entries that don't match the requested loaders), and
+        // explicitly accept "Any" game versions.
         if (!string.IsNullOrEmpty(loaders))
         {
             versions = versions.Where(v => v.Loaders.Contains(loaders)).ToList();
