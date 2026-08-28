@@ -59,9 +59,18 @@ public sealed class Account
     [JsonIgnore]
     public string DisplayName => string.IsNullOrWhiteSpace(Username) ? "Player" : Username;
 
+    /// <summary>Whether the account already has an applied skin texture.</summary>
+    [JsonIgnore]
+    public bool HasSkin => !string.IsNullOrEmpty(SkinUrl);
+
+    /// <summary>URL used for the account's avatar. Prefers the applied skin so
+    /// the avatar immediately reflects "Apply skin to active account"; falls
+    /// back to a cached portrait (Microsoft) when no skin is set yet.</summary>
     [JsonIgnore]
     public string AvatarUrl =>
-        Type == AccountType.Microsoft
-            ? $"https://minotar.net/helm/{Username}/64.png"
-            : SkinUrl;
+        HasSkin
+            ? SkinUrl
+            : Type == AccountType.Microsoft
+                ? $"https://minotar.net/helm/{Username}/64.png"
+                : "";
 }

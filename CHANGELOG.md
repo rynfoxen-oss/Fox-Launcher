@@ -4,9 +4,10 @@ All notable changes to FoxLauncher are documented in this file.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and uses [Semantic Versioning](https://semver.org/).
 
-## [1.1.0] - Unreleased
+## [1.1.0] - 2026-08-28
 ### Added
 - **Skins page**: a dedicated skin library where you can import, preview, rename, and apply Minecraft skins. The selected skin is shown in a crisp 2D character preview (head, body, arms and legs with all outer layers) that scales to the panel and stays pixel-sharp at any DPI. Imports are auto-detected as slim or classic models and applied to the active Microsoft or offline account. Imported PNGs are thumbnailed automatically.
+- **Background music**: a subtle synthesized ambient loop that plays in the app and follows the music volume slider in Settings (from the "More settings" placeholder it is now a real, working setting).
 - **Toast notifications**: transient, animated toasts in the lower-right corner for game launch, launch failures, crashes (with a "View report" shortcut), normal game exit (with an "Open folder" shortcut), skin import/apply, install failures, and update availability. Animations respect the reduced-motion setting; up to five toasts are shown at once, newest first.
 - **Global search (Ctrl+F / Ctrl+K)**: a full-window overlay that searches pages, instances, and the selected instance's installed mods, with keyboard navigation (arrows, Enter, Esc) and clickable results that navigate to the matching page or launch the instance.
 - **Keyboard shortcuts**: Ctrl+N opens Instances, Ctrl+, (comma) opens Settings, Esc closes the search overlay.
@@ -14,6 +15,13 @@ and uses [Semantic Versioning](https://semver.org/).
 - **Crisp skin previews**: the 2D character preview and library thumbnails render with nearest-neighbour sampling straight from the skin atlas, so every 64 px texture pixel stays clean (no blur) at any DPI, with a soft floor shadow under the figure.
 - **Library views**: the skin library offers grid and list views, search, sorting (newest / name / favorites first), and per-skin favorite and slim/classic toggles.
 - **Cleaner navigation**: sidebar items are now uniform single-line rows (no text wrapping), with a slimmer, quieter selected state.
+
+### Changed
+- **Settings cleanup**: removed the placeholder skin card, and made previously non-functional settings actually work — Discord presence toggle, auto-detect-Java-on-startup, background music and volume.
+- **Apply-a-skin previews refresh instantly**: selecting a different skin no longer requires manually refreshing the Skins page; the 2D preview re-renders immediately after applying. The applied skin is the one that appears selected when you return to the page.
+- **Skins selection is stable**: browsing the library no longer clears your selection or auto-applies a skin — apply happens only when you press Apply.
+- **Create Instance**: the game version picker lists versions newest first, defaults to the newest version, and is populated from the live Mojang manifest.
+- **Mods browser**: results are now compatibility-first — every card shows loader and exact-MC-version badges and a context readout ("Fabric · Minecraft 1.21.4") reflects the selected instance. Switching instances re-runs the browse automatically so results never go stale. A List/Grid view toggle switches between the compact list and a large-thumbnail grid, and double-click or Enter opens a mod's details.
 
 ## [1.0.3] - 2026-08-09
 ### Fixed

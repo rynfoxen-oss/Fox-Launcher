@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Security.Cryptography;
 using Launcher.Authentication;
 using Launcher.Models;
 using Launcher.Utils;
@@ -14,10 +16,10 @@ public sealed class SkinsViewModel : ViewModelBase
     private readonly List<SavedSkin> _all = new();
     private ObservableCollection<SavedSkin> _skins = new();
     private SavedSkin? _selectedSkin;
+    private string? _selectedSkinId;
     private string _searchText = "";
     private string _sortBy = "Newest";
     private bool _isGrid = true;
-    private bool _autoRotate;
     private bool _isBusy;
     private string _status = "";
 
@@ -48,6 +50,8 @@ public sealed class SkinsViewModel : ViewModelBase
         {
             OnPropertyChanged(nameof(HasActiveAccount));
             OnPropertyChanged(nameof(ActiveAccountName));
+            OnPropertyChanged(nameof(PreviewUrl));
+            OnPropertyChanged(nameof(PreviewModelPreference));
         };
     }
 
@@ -76,6 +80,11 @@ public sealed class SkinsViewModel : ViewModelBase
         {
             if (SetProperty(ref _selectedSkin, value))
             {
+                // Remember the skin by id so the selection survives list
+                // refreshes (WPF clears SelectedItem when ItemsSource is
+                // swapped, which writes null back through the binding) and
+                // page re-entry.
+                if (value is not null) _selectedSkinId = value.Id;
                 ApplyCommand.RaiseCanExecuteChanged();
                 ExportCommand.RaiseCanExecuteChanged();
                 OnPropertyChanged(nameof(PreviewUrl));
@@ -141,38 +150,20 @@ public sealed class SkinsViewModel : ViewModelBase
         => SelectedSkin is { FilePath: { Length: > 0 } path } ? path
             : Services.Accounts.Active?.SkinUrl ?? "";
 
-    /// <summary>Model preference for the preview: the skin's variant, otherwise the setting.</summary>
+    /// <summary>Model preference for the preview: the skin's variant when
+    /// selected, otherwise the active account's declared variant, else auto.</summary>
     public string PreviewModelPreference
-        => SelectedSkin is not null ? (SelectedSkin.IsSlim ? "Slim" : "Classic")
-            : Services.Settings.SkinModelPreference;
-
-    public bool PreviewAnimation
     {
-        get => Services.Settings.SkinAnimation;
-        set
+        get
         {
-            if (Services.Settings.SkinAnimation == value) return;
-            Services.Settings.SkinAnimation = value;
-            OnPropertyChanged();
+            if (SelectedSkin is not null) return SelectedSkin.IsSlim ? "Slim" : "Classic";
+            return Services.Accounts.Active?.SkinVariant switch
+            {
+                "SLIM" => "Slim",
+                "CLASSIC" => "Classic",
+                _ => "Auto"
+            };
         }
-    }
-
-    public string PreviewQuality
-    {
-        get => Services.Settings.SkinPreviewQuality;
-        set
-        {
-            if (Services.Settings.SkinPreviewQuality == value) return;
-            Services.Settings.SkinPreviewQuality = value;
-            OnPropertyChanged();
-        }
-    }
-
-    /// <summary>Auto-spin of the preview figure (transient, not persisted).</summary>
-    public bool PreviewAutoRotate
-    {
-        get => _autoRotate;
-        set => SetProperty(ref _autoRotate, value);
     }
 
     /// <summary>Count label in the toolbar, e.g. "12 skins".</summary>
@@ -206,10 +197,80 @@ public sealed class SkinsViewModel : ViewModelBase
         };
 
         Skins = new ObservableCollection<SavedSkin>(items);
+        RestoreSelection();
+    }
 
-        if (_selectedSkin is not null && !Skins.Contains(_selectedSkin))
+    /// <summary>Re-selects the remembered skin after the list was rebuilt. A
+    /// ListBox drops its selection (and pushes null through the binding) whenever
+    /// its ItemsSource changes, even if the same item is still present, so the
+    /// id-based selection is restored here to keep the highlight and preview.</summary>
+    private void RestoreSelection()
+    {
+        if (_selectedSkin is not null && Skins.Contains(_selectedSkin)) return;
+        if (_selectedSkinId is null) return;
+        var match = _all.FirstOrDefault(s => s.Id == _selectedSkinId);
+        if (match is not null && Skins.Contains(match))
+        {
+            SelectedSkin = match;
+        }
+    }
+
+    /// <summary>Re-shows the page: revert the transient preview selection so the
+    /// grid and preview reflect the account's actually-applied skin instead of
+    /// the last skin that was merely clicked. The applied skin is matched
+    /// against the library by content; when it can't be matched (e.g. a skin
+    /// uploaded through a Microsoft account) the selection clears and the
+    /// preview falls back to the account's applied texture directly.</summary>
+    public void OnPageShown()
+    {
+        var account = Services.Accounts.Active;
+        if (account is null)
         {
             SelectedSkin = null;
+            return;
+        }
+
+        var appliedPath = AppliedSkinLocalPath(account);
+        if (appliedPath is not null && File.Exists(appliedPath))
+        {
+            var appliedHash = GetFileHash(appliedPath);
+            if (appliedHash is not null)
+            {
+                var match = _all.FirstOrDefault(s =>
+                    File.Exists(s.FilePath) && string.Equals(GetFileHash(s.FilePath), appliedHash, StringComparison.Ordinal));
+                if (match is not null)
+                {
+                    SelectedSkin = match;
+                    return;
+                }
+            }
+        }
+        SelectedSkin = null;
+    }
+
+    /// <summary>Local file behind the account's applied skin, when any.
+    /// Offline copies live on disk; Microsoft textures are remote URLs.</summary>
+    private static string? AppliedSkinLocalPath(Account account)
+    {
+        if (string.IsNullOrEmpty(account.SkinUrl)) return null;
+        if (Uri.TryCreate(account.SkinUrl, UriKind.Absolute, out var uri) && uri.Scheme == "file")
+        {
+            return uri.LocalPath; // LocalPath drops any cache-buster query
+        }
+        return null;
+    }
+
+    private static string? GetFileHash(string path)
+    {
+        try
+        {
+            using var sha = SHA256.Create();
+            using var fs = File.OpenRead(path);
+            return Convert.ToHexString(sha.ComputeHash(fs));
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -280,7 +341,7 @@ public sealed class SkinsViewModel : ViewModelBase
                 }
                 else
                 {
-                    account.SkinUrl = url;
+                    account.SkinUrl = AddCacheBuster(url);
                     account.SkinVariant = variant;
                     Services.Accounts.SaveAccount(account);
                     Status = $"Applied '{skin.Name}' to '{account.Username}'.";
@@ -293,7 +354,7 @@ public sealed class SkinsViewModel : ViewModelBase
                 Directory.CreateDirectory(Paths.Skins);
                 File.Copy(skin.FilePath, dest, overwrite: true);
 
-                account.SkinUrl = new Uri(dest).AbsoluteUri;
+                account.SkinUrl = AddCacheBuster(new Uri(dest).AbsoluteUri);
                 account.SkinVariant = skin.IsSlim ? "SLIM" : "CLASSIC";
                 Services.Accounts.SaveAccount(account);
                 Status = $"Applied '{skin.Name}' to '{account.Username}' (offline).";
@@ -315,6 +376,12 @@ public sealed class SkinsViewModel : ViewModelBase
         {
             IsBusy = false;
         }
+    }
+
+    private static string AddCacheBuster(string url)
+    {
+        char sep = url.Contains('?') ? '&' : '?';
+        return $"{url}{sep}v={DateTime.UtcNow.Ticks}";
     }
 
     private async Task ExportAsync()

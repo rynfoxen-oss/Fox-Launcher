@@ -88,7 +88,8 @@
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <ctl:AvatarImage Width="48" Height="48" DisplayName="{Binding Username}"
-                                                     ImageUrl="{Binding AvatarUrl}"/>
+                                                 ImageUrl="{Binding AvatarUrl}"
+                                                 IsSkin="{Binding HasSkin}"/>
                                     <StackPanel Grid.Column="1" Margin="12,0,12,0" VerticalAlignment="Center">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="{Binding Username}" Style="{StaticResource SectionTitleText}"/>

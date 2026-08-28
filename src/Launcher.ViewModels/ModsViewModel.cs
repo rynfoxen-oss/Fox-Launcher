@@ -37,6 +37,7 @@ public sealed class ModsViewModel : ViewModelBase
     private bool _hasMore;
     private bool _isLoadingMore;
     private int _searchOffset;
+    private bool _isBrowseGrid = true;
     private string _installedFilter = "";
     private IReadOnlyList<ModInfo> _filteredMods = Array.Empty<ModInfo>();
     private IReadOnlyList<CategoryOption> _categoryChips = new[] { AllCategories };
@@ -92,6 +93,9 @@ public sealed class ModsViewModel : ViewModelBase
         services.Events.Subscribe<SelectedInstanceChangedEvent>(OnSelectedInstanceChanged);
         RefreshInstancesList();
         _ = LoadCategoriesAsync();
+
+        // Default the sort (and the matching badge/readout) to relevance instead of blank.
+        _selectedSort ??= SortOptions[0];
     }
 
     public sealed class SortOption
@@ -318,6 +322,14 @@ public sealed class ModsViewModel : ViewModelBase
         private set => SetProperty(ref _isLoadingMore, value);
     }
 
+    /// <summary>True when Browse results are shown as a large-thumbnail grid
+    /// instead of the compact list.</summary>
+    public bool IsBrowseGrid
+    {
+        get => _isBrowseGrid;
+        set => SetProperty(ref _isBrowseGrid, value);
+    }
+
     public string Status
     {
         get => _status;
@@ -419,6 +431,7 @@ public sealed class ModsViewModel : ViewModelBase
             if (match is not null) SetProperty(ref _comboInstance, match);
             var main = Services.Container.Resolve<MainViewModel>();
             if (main.SelectedInstance?.Id != value) main.SelectedInstance = match;
+            OnPropertyChanged(nameof(BrowseContext));
             Refresh();
         }
     }
@@ -430,6 +443,18 @@ public sealed class ModsViewModel : ViewModelBase
     }
 
     public string? InstanceId => _lastInstanceId;
+
+    /// <summary>Readout shown above Browse results, e.g. "Fabric · Minecraft 1.21.4".</summary>
+    public string BrowseContext
+    {
+        get
+        {
+            var instance = Services.Container.Resolve<MainViewModel>().SelectedInstance;
+            return instance is null
+                ? "No instance selected"
+                : $"{instance.LoaderLabel} · Minecraft {instance.GameVersion}";
+        }
+    }
 
     private ModLoaderType Loader => Services.Container.Resolve<MainViewModel>().SelectedInstance?.Loader ?? ModLoaderType.Vanilla;
     private string? GameVersion => Services.Container.Resolve<MainViewModel>().SelectedInstance?.GameVersion;
@@ -470,8 +495,11 @@ public sealed class ModsViewModel : ViewModelBase
         SyncComboToId();
         Refresh();
         UpdateCount = 0;
+        OnPropertyChanged(nameof(BrowseContext));
         _ = CheckUpdatesAsync();
-        if (!string.IsNullOrWhiteSpace(SearchQuery) && (SearchResults.Count > 0 || HasSearched))
+        // Re-run the current browse whenever results are on screen so switching
+        // instances never leaves a stale, mismatched result set behind.
+        if (IsBrowseVisible && (SearchResults.Count > 0 || HasSearched))
         {
             _searchCts?.Cancel();
             _ = SearchAsync();
@@ -552,7 +580,12 @@ public sealed class ModsViewModel : ViewModelBase
             SelectedCategory?.Slug, offset, ct: ct);
 
         var installed = Services.Mods.InstalledProjectIds(InstanceId!);
-        foreach (var row in results) row.Installed = installed.Contains(row.ProjectId);
+        var version = GameVersion;
+        foreach (var row in results)
+        {
+            row.Installed = installed.Contains(row.ProjectId);
+            row.ExactVersion = version;
+        }
         return results;
     }
 

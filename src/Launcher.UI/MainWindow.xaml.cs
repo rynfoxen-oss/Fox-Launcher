@@ -16,6 +16,7 @@ public partial class MainWindow : Window
     private readonly MainViewModel _vm;
     private readonly SearchViewModel _search;
     private bool _syncingNav;
+    private bool _closed;
 
     public MainWindow(ServiceHub hub)
     {
@@ -26,6 +27,7 @@ public partial class MainWindow : Window
         SearchOverlay.DataContext = _search;
         DataContext = _vm;
         _vm.PropertyChanged += OnVmPropertyChanged;
+        _hub.Accounts.Changed += OnAccountsChanged;
         StateChanged += OnWindowStateChanged;
 
         Loaded += (_, _) =>
@@ -195,6 +197,27 @@ public partial class MainWindow : Window
         return IntPtr.Zero;
     }
 
+    private void OnAccountsChanged()
+    {
+        // Runs from the same thread that raised Accounts.Changed (usually the
+        // UI thread for apply/login flows). Queue on the dispatcher so the
+        // account bindings get a chance to push a changed skin URL first; we
+        // only force a reload when the URL is unchanged (an offline re-apply
+        // overwrites the account's skin file in place).
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(OnAccountsChanged));
+            return;
+        }
+        var capturedUrl = AccountAvatar.ImageUrl;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (_closed) return;
+            if (string.Equals(capturedUrl, AccountAvatar.ImageUrl, StringComparison.Ordinal))
+                AccountAvatar.Reload();
+        }));
+    }
+
     private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(MainViewModel.CurrentPage))
@@ -293,6 +316,8 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        _closed = true;
+        _hub.Accounts.Changed -= OnAccountsChanged;
         _vm.PropertyChanged -= OnVmPropertyChanged;
         base.OnClosed(e);
     }

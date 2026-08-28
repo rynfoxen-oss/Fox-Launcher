@@ -30,11 +30,37 @@ public sealed class ModSearcher
         public DateTimeOffset DateModified { get; set; }
         public bool Installed { get; set; }
 
-        /// <summary>Mod categories shown as badges in the browse list, excluding loader tags.</summary>
-        public IReadOnlyList<string> Badges => Categories
-            .Where(c => c is not ("fabric" or "forge" or "neoforge" or "quilt"))
-            .Take(3)
-            .ToList();
+        /// <summary>Minecraft version being browsed for, set by the caller so each
+        /// card can show an exact compatibility badge.</summary>
+        public string? ExactVersion { get; set; }
+
+        public bool SupportsExactVersion =>
+            ExactVersion is not null && SupportedVersions.Contains(ExactVersion, StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Compatibility + category badges shown on result cards: the loader
+        /// tags first, then the exact Minecraft version, then up to two categories.</summary>
+        public IReadOnlyList<string> Badges
+        {
+            get
+            {
+                var badges = new List<string>(6);
+                foreach (var cat in Categories)
+                {
+                    switch (cat)
+                    {
+                        case "fabric": badges.Add("Fabric"); break;
+                        case "forge": badges.Add("Forge"); break;
+                        case "neoforge": badges.Add("NeoForge"); break;
+                        case "quilt": badges.Add("Quilt"); break;
+                    }
+                }
+                if (SupportsExactVersion) badges.Add($"MC {ExactVersion}");
+                badges.AddRange(Categories
+                    .Where(c => c is not ("fabric" or "forge" or "neoforge" or "quilt"))
+                    .Take(2));
+                return badges;
+            }
+        }
     }
 
     /// <summary>Autocomplete suggestion.</summary>

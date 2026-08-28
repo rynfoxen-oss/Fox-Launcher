@@ -40,6 +40,29 @@ public partial class ModsPage : UserControl
         return null;
     }
 
+    private static T? FindVisualParent<T>(DependencyObject child) where T : DependencyObject
+    {
+        var current = child;
+        while (current is not null)
+        {
+            if (current is T typed) return typed;
+            current = current is FrameworkContentElement content
+                ? content.Parent
+                : VisualTreeHelper.GetParent(current);
+        }
+        return null;
+    }
+
+    /// <summary>Double-clicking a browse result opens its detail drawer, unless
+    /// the double-click landed on one of the card's buttons (install/details).</summary>
+    private void BrowseList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is not DependencyObject source) return;
+        if (FindVisualParent<Button>(source) is not null) return;
+        if (sender is ListBox { DataContext: ModsViewModel vm } listBox && listBox.SelectedItem is ModSearcher.SearchRow row)
+            vm.SelectModCommand.Execute(row);
+    }
+
     private void SuggestionList_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         if (sender is ListBox listBox && listBox.SelectedItem is ModSearcher.Suggestion suggestion)

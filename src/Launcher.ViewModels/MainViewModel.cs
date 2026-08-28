@@ -68,6 +68,7 @@ public sealed class MainViewModel : ViewModelBase
 
         _accountsPage = services.Container.Resolve<AccountsViewModel>();
         _currentPage = ResolveStartupPage(home);
+        if (_currentPage is SkinsViewModel startupSkins) startupSkins.OnPageShown();
         RefreshAccounts();
         RestoreLastInstance();
 
@@ -159,6 +160,9 @@ public sealed class MainViewModel : ViewModelBase
             if (SetProperty(ref _currentPage, value))
             {
                 SyncNavSelection();
+                // Show the actually-applied skin in the skin library, not the
+                // last transient preview selection.
+                if (value is SkinsViewModel skins) skins.OnPageShown();
             }
         }
     }

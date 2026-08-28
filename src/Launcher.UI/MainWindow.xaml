@@ -201,6 +201,7 @@
                         <StackPanel Orientation="Horizontal">
                             <ctl:AvatarImage x:Name="AccountAvatar" Width="32" Height="32"
                                              ImageUrl="{Binding ActiveAccount.AvatarUrl}"
+                                             IsSkin="{Binding ActiveAccount.HasSkin}"
                                              DisplayName="{Binding ActiveAccount.Username}"/>
                             <StackPanel x:Name="AccountInfo" Margin="10,0,0,0" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding ActiveAccount.Username, FallbackValue='Not signed in'}"

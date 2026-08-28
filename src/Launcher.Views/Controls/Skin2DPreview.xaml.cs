@@ -51,7 +51,12 @@ public sealed partial class Skin2DPreview : UserControl
 
     public static readonly DependencyProperty TextureUrlProperty =
         DependencyProperty.Register(nameof(TextureUrl), typeof(string), typeof(Skin2DPreview),
-            new PropertyMetadata("", (d, _) => ((Skin2DPreview)d).Render()));
+            new PropertyMetadata("", (d, _) =>
+            {
+                var c = (Skin2DPreview)d;
+                c._dirty = true;
+                c.Render();
+            }));
 
     public string TextureUrl
     {
@@ -63,7 +68,12 @@ public sealed partial class Skin2DPreview : UserControl
     /// falls back to pixel detection).</summary>
     public static readonly DependencyProperty ModelPreferenceProperty =
         DependencyProperty.Register(nameof(ModelPreference), typeof(string), typeof(Skin2DPreview),
-            new PropertyMetadata("Auto", (d, _) => ((Skin2DPreview)d).Render()));
+            new PropertyMetadata("Auto", (d, _) =>
+            {
+                var c = (Skin2DPreview)d;
+                c._dirty = true;
+                c.Render();
+            }));
 
     public string ModelPreference
     {
@@ -74,7 +84,12 @@ public sealed partial class Skin2DPreview : UserControl
     /// <summary>Variant declared by the account: "CLASSIC", "SLIM" or empty.</summary>
     public static readonly DependencyProperty SkinVariantProperty =
         DependencyProperty.Register(nameof(SkinVariant), typeof(string), typeof(Skin2DPreview),
-            new PropertyMetadata("", (d, _) => ((Skin2DPreview)d).Render()));
+            new PropertyMetadata("", (d, _) =>
+            {
+                var c = (Skin2DPreview)d;
+                c._dirty = true;
+                c.Render();
+            }));
 
     public string SkinVariant
     {
@@ -270,7 +285,7 @@ public sealed partial class Skin2DPreview : UserControl
 
     /// <summary>Blits one front face of the atlas into the destination buffer at
     /// unit scale with straight-alpha source-over compositing.</summary>
-    private static void DrawFace(SkinTexture tex, SkinPart part, SkinLayer layer, SkinFace face, bool slim,
+    internal static void DrawFace(SkinTexture tex, SkinPart part, SkinLayer layer, SkinFace face, bool slim,
         int u, int destXUnits, int destYUnits, int width, byte[] dst)
     {
         var r = SkinUVMapper.GetRegion(part, layer, face, slim, tex.Width);
@@ -309,10 +324,10 @@ public sealed partial class Skin2DPreview : UserControl
         }
     }
 
-    private static byte Clamp(int v) => (byte)(v > 255 ? 255 : v);
+    internal static byte Clamp(int v) => (byte)(v > 255 ? 255 : v);
 
     /// <summary>Converts straight alpha to premultiplied (Pbgra32) in place.</summary>
-    private static void Premultiply(byte[] buf)
+    internal static void Premultiply(byte[] buf)
     {
         for (int i = 0; i < buf.Length; i += 4)
         {

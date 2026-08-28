@@ -224,7 +224,7 @@
                                        Foreground="{DynamicResource TextMuted}" HorizontalAlignment="Center"/>
                             <TextBlock Text="No skins in your library yet." Style="{StaticResource SectionTitleText}"
                                        HorizontalAlignment="Center" Margin="0,10,0,4"/>
-                            <TextBlock Text="Import a Minecraft skin PNG to preview it in 3D and apply it to your accounts."
+                            <TextBlock Text="Import a Minecraft skin PNG to preview it and apply it to your accounts."
                                        Style="{StaticResource MutedText}" HorizontalAlignment="Center" TextWrapping="Wrap"
                                        MaxWidth="360" TextAlignment="Center"/>
                         </StackPanel>

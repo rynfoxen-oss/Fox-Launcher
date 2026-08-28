@@ -12,13 +12,25 @@ namespace Launcher.Services;
 /// </summary>
 public sealed class DiscordRpcService : IDisposable
 {
-    private readonly CancellationTokenSource _cts = new();
+    private CancellationTokenSource _cts = new();
     private bool _disposed;
 
-    /// <summary>Starts the background IPC worker.</summary>
+    /// <summary>Starts the background IPC worker (safe to call again after
+    /// <see cref="Stop"/>).</summary>
     public void Start()
     {
+        if (_disposed) return;
+        if (_cts.IsCancellationRequested) _cts = new CancellationTokenSource();
         _ = Task.Run(RunAsync);
+    }
+
+    /// <summary>Clears the presence and stops the worker, so toggling the
+    /// setting off releases the Discord connection.</summary>
+    public void Stop()
+    {
+        if (_disposed) return;
+        ClearActivity();
+        _cts.Cancel();
     }
 
     /// <summary>Updates the activity shown on Discord.</summary>

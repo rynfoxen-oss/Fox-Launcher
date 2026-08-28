@@ -20,6 +20,7 @@ namespace Launcher.UI;
 public partial class App : Application
 {
     internal static App Instance = null!;
+    private MusicPlayerService? _music;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -403,10 +404,48 @@ public partial class App : Application
 
     private void RunStartupServices(ServiceHub hub)
     {
-        if (hub.Settings.EnableDiscordRpc)
+        var settings = hub.Settings;
+
+        // Background music starts automatically when the setting is on; the
+        // player follows BackgroundMusic / MusicVolume changes live.
+        _music = new MusicPlayerService(settings);
+
+        // Discord Rich Presence follows the toggle live: turning it on starts
+        // the IPC worker, turning it off clears the presence and stops it.
+        settings.PropertyChanged += (s, e) =>
+        {
+            if (e.PropertyName != nameof(SettingsService.EnableDiscordRpc)) return;
+            if (settings.EnableDiscordRpc)
+            {
+                try { hub.Discord.Start(); } catch { /* optional */ }
+            }
+            else
+            {
+                hub.Discord.Stop();
+            }
+        };
+
+        if (settings.EnableDiscordRpc)
         {
             try { hub.Discord.Start(); } catch { /* optional */ }
         }
+
+        // "Auto-detect Java on startup": fill an empty Java path before the
+        // user opens the Game & Java section.
+        if (settings.AutoJavaDetect && string.IsNullOrWhiteSpace(settings.JavaPath))
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var runtime = await hub.JavaLocator.FindJavaAsync();
+                    if (runtime is not null && string.IsNullOrWhiteSpace(settings.JavaPath))
+                        settings.JavaPath = runtime.Path;
+                }
+                catch { /* best-effort */ }
+            });
+        }
+
         _ = Task.Run(async () =>
         {
             try
@@ -540,6 +579,7 @@ public partial class App : Application
             // isn't lost on shutdown.
             AppHost.Services?.Settings.FlushAsync();
             AppHost.Services?.Settings.Dispose();
+            _music?.Dispose();
             AppHost.Services?.Discord.Dispose();
             AppHost.Services?.Log.Dispose();
         }

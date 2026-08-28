@@ -12,7 +12,7 @@ public static class AppInfo
     public const string Brand = "foxlauncher";
 
     /// <summary>Launcher version.</summary>
-    public const string Version = "1.0.3";
+    public const string Version = "1.1.0";
 
     /// <summary>Version type reported to Minecraft.</summary>
     public const string VersionType = "release";
@@ -35,9 +35,9 @@ public static class AppInfo
     /// <summary>GitHub repository used for auto-updates.</summary>
     public const string GitHubRepository = "rynfoxen-oss/Fox-Launcher";
 
-    /// <summary>Known game versions pinned on top of the version picker. Also used
-    /// as the offline fallback when the Mojang manifest cannot be reached. The full
-    /// list of releases is loaded from the manifest when online.</summary>
+    /// <summary>Known game versions, ordered newest to oldest. Also used as the
+    /// offline fallback when the Mojang manifest cannot be reached. The full list
+    /// of releases is loaded from the manifest when online.</summary>
     public static readonly string[] SupportedVersions =
     {
         "1.21.10", "1.21.9", "1.21.8", "1.21.7", "1.21.6", "1.21.5", "1.21.4", "1.21.3",

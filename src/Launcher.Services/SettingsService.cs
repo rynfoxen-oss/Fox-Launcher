@@ -271,30 +271,6 @@ public sealed class SettingsService : ObservableObject, IDisposable
         set { _settings.StartupPage = value; OnPropertyChanged(); Save(); }
     }
 
-    public bool SkinPreview3D
-    {
-        get => _settings.SkinPreview3D;
-        set { _settings.SkinPreview3D = value; OnPropertyChanged(); Save(); }
-    }
-
-    public string SkinModelPreference
-    {
-        get => _settings.SkinModelPreference;
-        set { _settings.SkinModelPreference = value; OnPropertyChanged(); Save(); }
-    }
-
-    public bool SkinAnimation
-    {
-        get => _settings.SkinAnimation;
-        set { _settings.SkinAnimation = value; OnPropertyChanged(); Save(); }
-    }
-
-    public string SkinPreviewQuality
-    {
-        get => _settings.SkinPreviewQuality;
-        set { _settings.SkinPreviewQuality = value; OnPropertyChanged(); Save(); }
-    }
-
     public bool ConfirmBeforeLaunch
     {
         get => _settings.ConfirmBeforeLaunch;

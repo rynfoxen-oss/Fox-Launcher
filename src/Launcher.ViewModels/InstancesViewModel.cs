@@ -20,7 +20,7 @@ public sealed class InstancesViewModel : ViewModelBase
     private bool _isInstalling;
     private string _installStage = "";
     private string _newName = "";
-    private string _newGameVersion = "1.20.1";
+    private string _newGameVersion = AppInfo.SupportedVersions[0];
     private ModLoaderType _newLoader = ModLoaderType.Vanilla;
     private string? _newLoaderVersion;
     private IReadOnlyList<string> _loaderVersions = Array.Empty<string>();
@@ -291,7 +291,7 @@ public sealed class InstancesViewModel : ViewModelBase
     }
 
     /// <summary>Fetches the official Minecraft version list from the Mojang manifest,
-    /// keeping the curated quick-list pinned on top and falling back to it offline.</summary>
+    /// ordered newest to oldest, falling back to the curated list when offline.</summary>
     private async Task LoadGameVersionsAsync()
     {
         IsLoadingGameVersions = true;
@@ -306,8 +306,7 @@ public sealed class InstancesViewModel : ViewModelBase
 
             if (releases.Count > 0)
             {
-                var curated = AppInfo.SupportedVersions.Where(releases.Contains).ToList();
-                GameVersions = curated.Concat(releases).Distinct().ToList();
+                GameVersions = releases;
 
                 if (string.IsNullOrWhiteSpace(NewGameVersion) ||
                     !GameVersions.Contains(NewGameVersion, StringComparer.Ordinal))
