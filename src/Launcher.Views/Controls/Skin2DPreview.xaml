@@ -1,0 +1,29 @@
+<UserControl x:Class="Launcher.Views.Controls.Skin2DPreview"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="Transparent"
+             SnapsToDevicePixels="True"
+             IsHitTestVisible="False">
+    <Canvas>
+        <!-- Soft floor shadow under the character's feet. -->
+        <Ellipse x:Name="Shadow" IsHitTestVisible="False">
+            <Ellipse.Fill>
+                <RadialGradientBrush Center="0.5,0.5" GradientOrigin="0.5,0.5" RadiusX="0.5" RadiusY="0.5">
+                    <GradientStop Offset="0" Color="#59000000"/>
+                    <GradientStop Offset="0.72" Color="#22000000"/>
+                    <GradientStop Offset="1" Color="#00000000"/>
+                </RadialGradientBrush>
+            </Ellipse.Fill>
+        </Ellipse>
+
+        <!-- The composed 2D character, rendered at device-resolution so every
+             texture pixel maps 1:1 to a crisp device pixel (nearest-neighbour). -->
+        <Image x:Name="Figure" IsHitTestVisible="False" Stretch="Fill"
+               RenderOptions.BitmapScalingMode="NearestNeighbor"
+               SnapsToDevicePixels="True">
+            <Image.RenderTransform>
+                <TranslateTransform x:Name="Bob"/>
+            </Image.RenderTransform>
+        </Image>
+    </Canvas>
+</UserControl>

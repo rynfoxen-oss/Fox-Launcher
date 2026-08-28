@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using Launcher.Models;
 using Launcher.ViewModels;
 
 namespace Launcher.Views.Pages;
@@ -17,5 +19,12 @@ public partial class HomePage : UserControl
     {
         Loaded -= OnLoaded;
         await ((HomeViewModel)DataContext).InitializeAsync();
+    }
+
+    private void OnInstanceCardClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not Border { Tag: GameInstance instance }) return;
+        var main = AppHost.Services!.Container.Resolve<MainViewModel>();
+        main.SelectedInstance = instance;
     }
 }

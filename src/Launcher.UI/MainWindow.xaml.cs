@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using Launcher.ViewModels;
 
 namespace Launcher.UI;
@@ -13,6 +14,7 @@ public partial class MainWindow : Window
 {
     private readonly ServiceHub _hub;
     private readonly MainViewModel _vm;
+    private readonly SearchViewModel _search;
     private bool _syncingNav;
 
     public MainWindow(ServiceHub hub)
@@ -20,6 +22,8 @@ public partial class MainWindow : Window
         _hub = hub;
         InitializeComponent();
         _vm = hub.Container.Resolve<MainViewModel>();
+        _search = hub.Container.Resolve<SearchViewModel>();
+        SearchOverlay.DataContext = _search;
         DataContext = _vm;
         _vm.PropertyChanged += OnVmPropertyChanged;
         StateChanged += OnWindowStateChanged;
@@ -30,6 +34,37 @@ public partial class MainWindow : Window
             SyncNavSelection();
             ClampToWorkArea();
         };
+    }
+
+    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    {
+        var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+
+        switch (e.Key)
+        {
+            case Key.F when ctrl:
+            case Key.K when ctrl:
+                _search.Open();
+                e.Handled = true;
+                return;
+            case Key.N when ctrl:
+                _vm.Navigate<InstancesViewModel>();
+                e.Handled = true;
+                return;
+            case Key.OemComma when ctrl:
+                _vm.Navigate<SettingsViewModel>();
+                e.Handled = true;
+                return;
+            case Key.Escape:
+                if (_search.IsOpen)
+                {
+                    _search.Close();
+                    e.Handled = true;
+                }
+                return;
+        }
+
+        base.OnPreviewKeyDown(e);
     }
 
     private void OnWindowStateChanged(object? sender, EventArgs e)
@@ -165,6 +200,7 @@ public partial class MainWindow : Window
         if (e.PropertyName == nameof(MainViewModel.CurrentPage))
         {
             SyncNavSelection();
+            AnimatePageTransition();
         }
         else if (e.PropertyName == nameof(MainViewModel.IsSidebarCollapsed))
         {
@@ -172,9 +208,24 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Gentle fade when switching pages. Skipped entirely when the user enabled
+    /// "Reduce UI effects", so the option genuinely removes the animation.
+    /// </summary>
+    private void AnimatePageTransition()
+    {
+        if (_hub.Settings.DisableAnimations) return;
+
+        PageHost.BeginAnimation(UIElement.OpacityProperty, null);
+        PageHost.Opacity = 0.45;
+        var fade = new DoubleAnimation(0.45, 1, TimeSpan.FromMilliseconds(160));
+        PageHost.BeginAnimation(UIElement.OpacityProperty, fade);
+    }
+
     private void ApplySidebar()
     {
-        var target = _vm.IsSidebarCollapsed ? 0d : 220d;
+        var collapsed = _vm.IsSidebarCollapsed;
+        var target = collapsed ? 60d : 220d;
         if (Math.Abs(SidebarColumn.Width.Value - target) < 0.5) return;
 
         var animation = new GridLengthAnimation
@@ -184,6 +235,14 @@ public partial class MainWindow : Window
             Duration = TimeSpan.FromMilliseconds(180)
         };
         SidebarColumn.BeginAnimation(ColumnDefinition.WidthProperty, animation);
+
+        // Toggle visibility of expanded-only elements
+        LogoText.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        InstanceLabel.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        InstanceCombo.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        AccountInfo.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        ToggleGlyph.Text = collapsed ? "\uE701" : "\uE700";
+        ToggleSidebarBtn.ToolTip = collapsed ? "Expand sidebar" : "Collapse sidebar";
     }
 
     private void SyncNavSelection()

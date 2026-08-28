@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <Resource Include="Assets\skins\default_steve.png" />
+    <Resource Include="Fonts\segmdl2.ttf" />
   </ItemGroup>
 
   <ItemGroup>

@@ -5,8 +5,7 @@ using Launcher.Utils;
 namespace Launcher.ViewModels;
 
 /// <summary>
-/// Home page: large play button, background slideshow, news, recent updates and
-/// quick stats about the selected instance.
+/// Home page: large play button, background, news, recent instances and quick actions.
 /// </summary>
 public sealed class HomeViewModel : ViewModelBase
 {
@@ -16,6 +15,10 @@ public sealed class HomeViewModel : ViewModelBase
     private IReadOnlyList<GameInstance> _recentInstances = Array.Empty<GameInstance>();
     private bool _isInstalling;
     private string _installStage = "";
+    private bool _isLaunching;
+    private string _lastLaunchError = "";
+    private bool _isSidebarCollapsed;
+    private NavItem? _selectedNavItem;
 
     public HomeViewModel(ServiceHub services) : base(services)
     {
@@ -27,21 +30,11 @@ public sealed class HomeViewModel : ViewModelBase
         });
         NavigateInstancesCommand = new RelayCommand(() => Main?.Navigate<InstancesViewModel>());
         NavigateAccountsCommand = new RelayCommand(() => Main?.NavigateAccounts());
-        PlayInstanceCommand = new RelayCommand(p =>
-        {
-            if (p is GameInstance instance && Main is not null)
-            {
-                Main.SelectedInstance = instance;
-                _ = PlayAsync().ContinueWith(t =>
-                {
-                    if (t.IsFaulted)
-                    {
-                        try { Services.Log.Error("Failed to launch instance", t.Exception); }
-                        catch { /* never fail on logging */ }
-                    }
-                }, TaskContinuationOptions.OnlyOnFaulted);
-            }
-        }, _ => CanLaunch);
+        NavigateSkinsCommand = new RelayCommand(() => Main?.Navigate<SkinsViewModel>());
+        CreateInstanceCommand = new RelayCommand(() => Main?.Navigate<InstancesViewModel>(), _ => true);
+        NavigateModsCommand = new RelayCommand(() => Main?.Navigate<ModsViewModel>());
+        NavigateSettingsCommand = new RelayCommand(() => Main?.Navigate<SettingsViewModel>());
+        ToggleSidebarCommand = new RelayCommand(() => IsSidebarCollapsed = !IsSidebarCollapsed);
 
         Services.Events.Subscribe<GameLaunchedEvent>(_ => RaisePlayStateChanged());
         Services.Events.Subscribe<GameExitedEvent>(_ => RaisePlayStateChanged());
@@ -55,7 +48,11 @@ public sealed class HomeViewModel : ViewModelBase
     public RelayCommand OpenNewsCommand { get; }
     public RelayCommand NavigateInstancesCommand { get; }
     public RelayCommand NavigateAccountsCommand { get; }
-    public RelayCommand PlayInstanceCommand { get; }
+    public RelayCommand NavigateSkinsCommand { get; }
+    public RelayCommand CreateInstanceCommand { get; }
+    public RelayCommand NavigateModsCommand { get; }
+    public RelayCommand NavigateSettingsCommand { get; }
+    public RelayCommand ToggleSidebarCommand { get; }
 
     /// <summary>True while no game process is running; gates the Play buttons.</summary>
     private bool CanLaunch => Services.Launcher.Running.Count == 0;
@@ -63,7 +60,7 @@ public sealed class HomeViewModel : ViewModelBase
     private void RaisePlayStateChanged()
     {
         PlayCommand.RaiseCanExecuteChanged();
-        PlayInstanceCommand.RaiseCanExecuteChanged();
+        OnPropertyChanged(nameof(CanLaunch));
     }
 
     /// <summary>The instance currently selected for launch.</summary>
@@ -109,6 +106,39 @@ public sealed class HomeViewModel : ViewModelBase
         private set => SetProperty(ref _installStage, value);
     }
 
+    public bool IsLaunching
+    {
+        get => _isLaunching;
+        private set => SetProperty(ref _isLaunching, value);
+    }
+
+    public string LastLaunchError
+    {
+        get => _lastLaunchError;
+        private set => SetProperty(ref _lastLaunchError, value);
+    }
+
+    public bool IsSidebarCollapsed
+    {
+        get => _isSidebarCollapsed;
+        set => SetProperty(ref _isSidebarCollapsed, value);
+    }
+
+    /// <summary>Sidebar navigation items.</summary>
+    public IReadOnlyList<NavItem> NavItems => Main?.Pages ?? Array.Empty<NavItem>();
+
+    public NavItem? SelectedNavItem
+    {
+        get => _selectedNavItem;
+        set
+        {
+            if (SetProperty(ref _selectedNavItem, value) && value is not null)
+            {
+                Main?.Navigate(value);
+            }
+        }
+    }
+
     /// <summary>Loads the news feed and instance list once.</summary>
     public async Task InitializeAsync()
     {
@@ -128,6 +158,8 @@ public sealed class HomeViewModel : ViewModelBase
             Main?.Navigate<InstancesViewModel>();
             return;
         }
+
+        LastLaunchError = "";
 
         if (Services.Settings.ConfirmBeforeLaunch
             && Services.ConfirmDialog?.Invoke("Launch game", $"Launch '{instance.Name}'?") == false)
@@ -166,7 +198,9 @@ public sealed class HomeViewModel : ViewModelBase
             catch (Exception ex)
             {
                 Services.Log.Error("Failed to install version", ex);
-                Main!.Status = $"Install failed: {ex.Message}";
+                LastLaunchError = $"Install failed: {ex.Message}";
+                Main!.Status = LastLaunchError;
+                Services.Notifications.Error("Install failed", $"Could not install {instance.Name} ({instance.GameVersion}). {ex.Message}");
                 return;
             }
             finally
@@ -192,6 +226,7 @@ public sealed class HomeViewModel : ViewModelBase
             JvmArguments = Services.Settings.JvmArguments
         };
 
+        IsLaunching = true;
         Main!.Status = "Launching...";
         var result = await Services.Launcher.LaunchAsync(instance, instance.VersionId, options);
 
@@ -200,11 +235,15 @@ public sealed class HomeViewModel : ViewModelBase
             Main.IsPlaying = true;
             Main.Status = $"Playing {instance.Name}";
             AddRecent(instance);
+            Services.Notifications.Success("Game launched", $"{instance.Name} is starting.");
         }
         else
         {
             Main.Status = result.ErrorMessage ?? "Launch failed";
+            LastLaunchError = result.ErrorMessage ?? "Unknown error occurred";
+            Services.Notifications.Error("Could not launch", $"{instance.Name} failed to start: {LastLaunchError}");
         }
+        IsLaunching = false;
     }
 
     /// <summary>Adds an instance to the recent list in settings.</summary>
@@ -218,7 +257,7 @@ public sealed class HomeViewModel : ViewModelBase
         RefreshInstances();
     }
 
-    private void RefreshInstances()
+    internal void RefreshInstances()
     {
         var recent = Services.Settings.RecentInstances;
         var byId = Services.Instances.Instances.ToDictionary(i => i.Id);

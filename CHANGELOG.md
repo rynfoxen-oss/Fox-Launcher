@@ -4,6 +4,17 @@ All notable changes to FoxLauncher are documented in this file.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and uses [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - Unreleased
+### Added
+- **Skins page**: a dedicated skin library where you can import, preview, rename, and apply Minecraft skins. The selected skin is shown in a crisp 2D character preview (head, body, arms and legs with all outer layers) that scales to the panel and stays pixel-sharp at any DPI. Imports are auto-detected as slim or classic models and applied to the active Microsoft or offline account. Imported PNGs are thumbnailed automatically.
+- **Toast notifications**: transient, animated toasts in the lower-right corner for game launch, launch failures, crashes (with a "View report" shortcut), normal game exit (with an "Open folder" shortcut), skin import/apply, install failures, and update availability. Animations respect the reduced-motion setting; up to five toasts are shown at once, newest first.
+- **Global search (Ctrl+F / Ctrl+K)**: a full-window overlay that searches pages, instances, and the selected instance's installed mods, with keyboard navigation (arrows, Enter, Esc) and clickable results that navigate to the matching page or launch the instance.
+- **Keyboard shortcuts**: Ctrl+N opens Instances, Ctrl+, (comma) opens Settings, Esc closes the search overlay.
+- **Page transitions**: content pages now fade in smoothly when you switch (skipped when reduced motion is enabled).
+- **Crisp skin previews**: the 2D character preview and library thumbnails render with nearest-neighbour sampling straight from the skin atlas, so every 64 px texture pixel stays clean (no blur) at any DPI, with a soft floor shadow under the figure.
+- **Library views**: the skin library offers grid and list views, search, sorting (newest / name / favorites first), and per-skin favorite and slim/classic toggles.
+- **Cleaner navigation**: sidebar items are now uniform single-line rows (no text wrapping), with a slimmer, quieter selected state.
+
 ## [1.0.3] - 2026-08-09
 ### Fixed
 - Auto-update no longer reports "Download failed" on release builds. GitHub reports asset digests as `sha256:<hex>`, but the launcher compared them against a plain hex hash, so SHA-256 verification always failed once a release carried a digest. The algorithm prefix is now stripped (in both the GitHub API mapping and the downloader), so older builds can finally install updates.

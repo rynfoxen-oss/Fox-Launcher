@@ -1,0 +1,55 @@
+<UserControl x:Class="Launcher.Views.Controls.NotificationHost"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:models="clr-namespace:Launcher.Models;assembly=Launcher.Models"
+             xmlns:conv="clr-namespace:Launcher.Views.Converters"
+             Focusable="False">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+        <conv:NullToVisibilityConverter x:Key="NullToVisibilityConverter"/>
+        <conv:NotificationLevelBrushConverter x:Key="LevelBrushConverter"/>
+        <conv:NotificationLevelGlyphConverter x:Key="LevelGlyphConverter"/>
+        <conv:NotificationLevelBorderConverter x:Key="LevelBorderConverter"/>
+
+        <DataTemplate x:Key="ToastTemplate" DataType="{x:Type models:NotificationItem}">
+            <Border Style="{StaticResource ToastNotification}" Margin="0,0,0,6"
+                    BorderBrush="{Binding Level, Converter={StaticResource LevelBorderConverter}}"
+                    RenderTransformOrigin="0.5,0.5">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Width="34" Height="34" CornerRadius="17" VerticalAlignment="Top"
+                            Background="{Binding Level, Converter={StaticResource LevelBrushConverter}}">
+                        <TextBlock Text="{Binding Level, Converter={StaticResource LevelGlyphConverter}}"
+                                   FontFamily="{StaticResource IconFont}" FontSize="15"
+                                   Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="12,0,10,0">
+                        <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding Message}" FontSize="12"
+                                   Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap"
+                                   Margin="0,3,0,0" LineHeight="17" MaxHeight="60"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
+                                    Visibility="{Binding ActionLabel, Converter={StaticResource NullToVisibilityConverter}}">
+                            <Button Content="{Binding ActionLabel}" Style="{StaticResource GhostButton}"
+                                    Padding="12,5" FontSize="12" Click="OnToastActionClick"
+                                    AutomationProperties.Name="{Binding ActionLabel}"/>
+                        </StackPanel>
+                    </StackPanel>
+                    <Button Grid.Column="2" Content="&#xE894;" FontFamily="{StaticResource IconFont}" FontSize="11"
+                            Style="{StaticResource IconButton}" Click="OnToastDismissClick"
+                            VerticalAlignment="Top"
+                            ToolTip="Dismiss" AutomationProperties.Name="Dismiss notification"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+    <Grid>
+        <StackPanel x:Name="Host" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                    Margin="0,0,16,16" Width="380"/>
+    </Grid>
+</UserControl>

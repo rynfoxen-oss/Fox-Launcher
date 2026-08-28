@@ -125,12 +125,12 @@ public static class SkinUVMapper
 
         Add(SkinPart.LeftArm, SkinLayer.Base, new[]
         {
-            (SkinFace.Front, 40, 52, 4, 12),
-            (SkinFace.Back, 48, 52, 4, 12),
-            (SkinFace.Right, 36, 52, 4, 12),
-            (SkinFace.Left, 44, 52, 4, 12),
-            (SkinFace.Top, 36, 48, 4, 4),
-            (SkinFace.Bottom, 36, 52, 4, 4),
+            (SkinFace.Front, 40, 20, 4, 12),
+            (SkinFace.Back, 48, 20, 4, 12),
+            (SkinFace.Right, 36, 20, 4, 12),
+            (SkinFace.Left, 44, 20, 4, 12),
+            (SkinFace.Top, 36, 16, 4, 4),
+            (SkinFace.Bottom, 36, 24, 4, 4),
         });
         Add(SkinPart.LeftArm, SkinLayer.Overlay, new[]
         {
@@ -161,23 +161,25 @@ public static class SkinUVMapper
             (SkinFace.Bottom, 4, 40, 4, 4),
         });
 
+        // The left leg lives in the lower-left block of the 64x64 sheet
+        // (x16-31, y48-63) — NOT a mirror copy of the right leg's upper region.
         Add(SkinPart.LeftLeg, SkinLayer.Base, new[]
         {
-            (SkinFace.Front, 24, 52, 4, 12),
-            (SkinFace.Back, 32, 52, 4, 12),
-            (SkinFace.Right, 20, 52, 4, 12),
-            (SkinFace.Left, 28, 52, 4, 12),
+            (SkinFace.Front, 20, 52, 4, 12),
+            (SkinFace.Back, 28, 52, 4, 12),
+            (SkinFace.Right, 16, 52, 4, 12),
+            (SkinFace.Left, 24, 52, 4, 12),
             (SkinFace.Top, 20, 48, 4, 4),
-            (SkinFace.Bottom, 20, 52, 4, 4),
+            (SkinFace.Bottom, 24, 48, 4, 4),
         });
         Add(SkinPart.LeftLeg, SkinLayer.Overlay, new[]
         {
-            (SkinFace.Front, 24, 36, 4, 12),
-            (SkinFace.Back, 32, 36, 4, 12),
-            (SkinFace.Right, 20, 36, 4, 12),
-            (SkinFace.Left, 28, 36, 4, 12),
-            (SkinFace.Top, 20, 32, 4, 4),
-            (SkinFace.Bottom, 20, 40, 4, 4),
+            (SkinFace.Front, 4, 52, 4, 12),
+            (SkinFace.Back, 12, 52, 4, 12),
+            (SkinFace.Right, 0, 52, 4, 12),
+            (SkinFace.Left, 8, 52, 4, 12),
+            (SkinFace.Top, 4, 48, 4, 4),
+            (SkinFace.Bottom, 8, 48, 4, 4),
         });
 
         return map;

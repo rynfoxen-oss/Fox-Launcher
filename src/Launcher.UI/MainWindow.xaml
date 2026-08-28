@@ -54,6 +54,9 @@
         <DataTemplate DataType="{x:Type vm:AccountsViewModel}">
             <pages:AccountsPage/>
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:SkinsViewModel}">
+            <pages:SkinsPage/>
+        </DataTemplate>
     </Window.Resources>
 
     <Grid>
@@ -99,78 +102,116 @@
             </Grid.ColumnDefinitions>
 
             <!-- Sidebar -->
-            <Grid Grid.Column="0" Background="{DynamicResource TitleBarBackground}">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
+            <Border Grid.Column="0" Background="{DynamicResource TitleBarBackground}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
-                <Button Grid.Row="0" Style="{StaticResource GhostButton}" Margin="12,12,12,8" Padding="10,8"
-                        Command="{Binding ToggleSidebarCommand}" ToolTip="Collapse sidebar">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE700;" FontFamily="Segoe MDL2 Assets" FontSize="12"/>
-                        <TextBlock Text="  Navigation" Style="{StaticResource SectionTitleText}"/>
-                    </StackPanel>
-                </Button>
-
-                <!-- Instance selector -->
-                <Border Grid.Row="1" Margin="12,0,12,10" Padding="10"
-                        Background="{DynamicResource SurfaceAltBrush}" CornerRadius="8"
-                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
-                    <StackPanel>
-                        <TextBlock Text="Selected instance" Style="{StaticResource CaptionText}"/>
-                        <ComboBox ItemsSource="{Binding Instances}" SelectedValuePath="Id"
-                                  SelectedValue="{Binding SelectedInstanceId, Mode=TwoWay}"
-                                  Style="{StaticResource InputComboBox}" Margin="0,6,0,0">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding Name}" FontSize="13"
-                                                   Foreground="{DynamicResource TextPrimary}"
-                                                   TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock Text="{Binding DisplayTitle}" FontSize="11"
-                                                   Foreground="{DynamicResource TextSecondary}"
-                                                   TextTrimming="CharacterEllipsis"/>
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                    </StackPanel>
-                </Border>
-
-                <!-- Navigation -->
-                <ListBox x:Name="NavList" Grid.Row="2" ItemsSource="{Binding Pages}"
-                         Style="{StaticResource NavListBox}" Margin="12,0,12,8"
-                         SelectionChanged="OnNavSelectionChanged">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate DataType="{x:Type vm:NavItem}">
-                            <StackPanel Orientation="Horizontal" Margin="10,7">
-                                <TextBlock Text="{Binding Glyph}" FontFamily="Segoe MDL2 Assets" FontSize="14"
-                                           Foreground="{DynamicResource TextSecondary}"/>
-                                <TextBlock Text="{Binding Title}" Style="{StaticResource BaseText}" Margin="12,0,0,0"/>
-                            </StackPanel>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-
-                <!-- Account -->
-                <Button Grid.Row="3" Margin="12,0,12,10" Style="{StaticResource GhostButton}" Padding="10"
-                        HorizontalContentAlignment="Stretch" Command="{Binding NavigateAccountsCommand}">
-                    <StackPanel Orientation="Horizontal">
-                        <ctl:AvatarImage Width="32" Height="32" ImageUrl="{Binding ActiveAccount.AvatarUrl}"
-                                         DisplayName="{Binding ActiveAccount.Username}"/>
-                        <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding ActiveAccount.Username, FallbackValue='Not signed in'}"
-                                       Style="{StaticResource BaseText}"/>
-                            <TextBlock Text="{Binding ActiveAccount.Type, FallbackValue='No account'}"
-                                       Style="{StaticResource CaptionText}"/>
+                    <!-- Toggle + Logo area -->
+                    <Grid Grid.Row="0" Margin="12,12,12,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="ToggleSidebarBtn" Style="{StaticResource GhostButton}" Padding="8"
+                                Command="{Binding ToggleSidebarCommand}" ToolTip="Collapse sidebar">
+                            <TextBlock x:Name="ToggleGlyph" Text="&#xE700;" FontFamily="{StaticResource IconFont}" FontSize="14"/>
+                        </Button>
+                        <StackPanel x:Name="LogoPanel" Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0"
+                                    VerticalAlignment="Center">
+                            <Image Source="pack://application:,,,/assets/icons/fox.ico" Width="20" Height="20"/>
+                            <TextBlock x:Name="LogoText" Text="FoxLauncher" Style="{StaticResource SectionTitleText}"
+                                       Margin="10,0,0,0" VerticalAlignment="Center" FontSize="15"/>
                         </StackPanel>
-                    </StackPanel>
-                </Button>
-            </Grid>
+                    </Grid>
+
+                    <!-- Instance selector -->
+                    <Border Grid.Row="1" x:Name="InstanceSelectorBorder" Margin="12,0,12,10" Padding="10"
+                            Background="{DynamicResource SurfaceAltBrush}" CornerRadius="8"
+                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock x:Name="InstanceLabel" Text="Selected instance" Style="{StaticResource CaptionText}"/>
+                            <ComboBox x:Name="InstanceCombo" ItemsSource="{Binding Instances}" SelectedValuePath="Id"
+                                      SelectedValue="{Binding SelectedInstanceId, Mode=TwoWay}"
+                                      Style="{StaticResource InputComboBox}" Margin="0,6,0,0">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Name}" FontSize="13"
+                                                       Foreground="{DynamicResource TextPrimary}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding DisplayTitle}" FontSize="11"
+                                                       Foreground="{DynamicResource TextSecondary}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Navigation -->
+                    <ListBox x:Name="NavList" Grid.Row="2" ItemsSource="{Binding Pages}"
+                             Style="{StaticResource NavListBox}" Margin="12,0,12,8"
+                             SelectionChanged="OnNavSelectionChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:NavItem}">
+                                <Grid Height="32">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="36"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="15"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Grid.Column="1" Text="{Binding Title}" Margin="12,0,0,0" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource BaseText}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <!-- Account -->
+                    <Button Grid.Row="3" Margin="12,0,12,10" Style="{StaticResource GhostButton}" Padding="10"
+                            HorizontalContentAlignment="Stretch" Command="{Binding NavigateAccountsCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <ctl:AvatarImage x:Name="AccountAvatar" Width="32" Height="32"
+                                             ImageUrl="{Binding ActiveAccount.AvatarUrl}"
+                                             DisplayName="{Binding ActiveAccount.Username}"/>
+                            <StackPanel x:Name="AccountInfo" Margin="10,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding ActiveAccount.Username, FallbackValue='Not signed in'}"
+                                           Style="{StaticResource BaseText}"/>
+                                <TextBlock Text="{Binding ActiveAccount.Type, FallbackValue='No account'}"
+                                           Style="{StaticResource CaptionText}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Button>
+                </Grid>
+            </Border>
 
             <Border Grid.Column="1" Background="{DynamicResource BorderBrush}"/>
 
@@ -236,5 +277,11 @@
                 </TextBlock>
             </Grid>
         </Border>
+
+        <!-- ============ Global search overlay ============ -->
+        <ctl:SearchOverlay x:Name="SearchOverlay" Grid.RowSpan="3" Panel.ZIndex="1200"/>
+
+        <!-- ============ Toast notifications ============ -->
+        <ctl:NotificationHost x:Name="ToastHost" Grid.RowSpan="3" Panel.ZIndex="1100"/>
     </Grid>
 </Window>

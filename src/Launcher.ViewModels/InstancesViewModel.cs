@@ -12,6 +12,7 @@ namespace Launcher.ViewModels;
 public sealed class InstancesViewModel : ViewModelBase
 {
     private IReadOnlyList<GameInstance> _instances = Array.Empty<GameInstance>();
+    private IReadOnlyList<GameInstance> _filteredInstances = Array.Empty<GameInstance>();
     private GameInstance? _selected;
     private bool _isCreating;
     private bool _isLoadingVersions;
@@ -27,6 +28,8 @@ public sealed class InstancesViewModel : ViewModelBase
     private IReadOnlyList<ModLoaderType> _availableLoaders = new[] { ModLoaderType.Vanilla };
     private string _status = "";
     private string? _activeId;
+    private string _searchText = "";
+    private SortOption _sortBy = SortOption.Name;
     private readonly LogService _log;
 
     public InstancesViewModel(ServiceHub services) : base(services)
@@ -77,7 +80,43 @@ public sealed class InstancesViewModel : ViewModelBase
     public IReadOnlyList<GameInstance> Instances
     {
         get => _instances;
-        private set => SetProperty(ref _instances, value);
+        private set
+        {
+            if (SetProperty(ref _instances, value))
+            {
+                ApplyFilter();
+            }
+        }
+    }
+
+    public IReadOnlyList<GameInstance> FilteredInstances
+    {
+        get => _filteredInstances;
+        private set => SetProperty(ref _filteredInstances, value);
+    }
+
+    public string SearchText
+    {
+        get => _searchText;
+        set
+        {
+            if (SetProperty(ref _searchText, value))
+            {
+                ApplyFilter();
+            }
+        }
+    }
+
+    public SortOption SortBy
+    {
+        get => _sortBy;
+        set
+        {
+            if (SetProperty(ref _sortBy, value))
+            {
+                ApplyFilter();
+            }
+        }
     }
 
     public GameInstance? Selected
@@ -478,4 +517,37 @@ public sealed class InstancesViewModel : ViewModelBase
     }
 
     private MainViewModel? MainNavigation() => Services.Container.Resolve<MainViewModel>();
+
+    private void ApplyFilter()
+    {
+        IEnumerable<GameInstance> query = Instances;
+
+        if (!string.IsNullOrWhiteSpace(SearchText))
+        {
+            var search = SearchText.Trim();
+            query = query.Where(i =>
+                i.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                i.GameVersion.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                i.LoaderLabel.Contains(search, StringComparison.OrdinalIgnoreCase));
+        }
+
+        query = SortBy switch
+        {
+            SortOption.Name => query.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase),
+            SortOption.Version => query.OrderByDescending(i => i.GameVersion, StringComparer.OrdinalIgnoreCase),
+            SortOption.LastPlayed => query.OrderByDescending(i => i.LastPlayedAt),
+            SortOption.Created => query.OrderByDescending(i => i.CreatedAt),
+            _ => query.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+        };
+
+        FilteredInstances = query.ToList();
+    }
+}
+
+public enum SortOption
+{
+    Name,
+    Version,
+    LastPlayed,
+    Created
 }

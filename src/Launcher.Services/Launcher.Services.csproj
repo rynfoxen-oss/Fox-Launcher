@@ -9,6 +9,7 @@
     <ProjectReference Include="..\Launcher.Models\Launcher.Models.csproj" />
     <ProjectReference Include="..\Launcher.Utils\Launcher.Utils.csproj" />
     <ProjectReference Include="..\Launcher.Network\Launcher.Network.csproj" />
+    <ProjectReference Include="..\Launcher.Skin\Launcher.Skin.csproj" />
   </ItemGroup>
 
 </Project>

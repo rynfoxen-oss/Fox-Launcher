@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Launcher.Models;
 using Launcher.Services;
 using Launcher.Utils;
@@ -5,11 +6,27 @@ using Launcher.Utils;
 namespace Launcher.ViewModels;
 
 /// <summary>A navigation sidebar entry.</summary>
-public sealed class NavItem
+public sealed class NavItem : INotifyPropertyChanged
 {
     public string Title { get; init; } = "";
     public string Glyph { get; init; } = "";
     public ViewModelBase ViewModel { get; init; } = null!;
+
+    private bool _isSelected;
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            if (_isSelected != value)
+            {
+                _isSelected = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSelected)));
+            }
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
 }
 
 /// <summary>
@@ -38,6 +55,7 @@ public sealed class MainViewModel : ViewModelBase
             new() { Title = "Home", Glyph = "\uE80F", ViewModel = home },
             new() { Title = "Instances", Glyph = "\uE80B", ViewModel = services.Container.Resolve<InstancesViewModel>() },
             new() { Title = "Mods", Glyph = "\uE711", ViewModel = services.Container.Resolve<ModsViewModel>() },
+            new() { Title = "Skins", Glyph = "\uE81C", ViewModel = services.Container.Resolve<SkinsViewModel>() },
             new() { Title = "Resource Packs", Glyph = "\uE8B7", ViewModel = services.Container.Resolve<ResourcePacksViewModel>() },
             new() { Title = "Shaders", Glyph = "\uE950", ViewModel = services.Container.Resolve<ShadersViewModel>() },
             new() { Title = "Worlds", Glyph = "\uE7C3", ViewModel = services.Container.Resolve<WorldsViewModel>() },
@@ -90,6 +108,21 @@ public sealed class MainViewModel : ViewModelBase
                 : e.FailureDetail is { } detail ? $"Game exited with code {e.ExitCode}. {detail}"
                 : $"Game exited with code {e.ExitCode}.";
 
+            var name = services.Instances.GetInstance(e.InstanceId)?.Name ?? "Game";
+            if (e.Crashed)
+            {
+                services.Notifications.ShowAction(NotificationLevel.Error, $"{name} crashed",
+                    $"Exit code {e.ExitCode}. A crash report was saved.",
+                    "View report", OpenCrashReport);
+            }
+            else if (e.ExitCode == 0)
+            {
+                var folder = Paths.InstanceFolder(e.InstanceId);
+                services.Notifications.ShowAction(NotificationLevel.Success, $"{name} closed",
+                    "The game exited normally.", "Open folder",
+                    () => ProcessHelper.Open(folder));
+            }
+
             // Persist play-time stats recorded by the launcher on this session.
             if (services.Instances.GetInstance(e.InstanceId) is { } exited)
             {
@@ -121,7 +154,13 @@ public sealed class MainViewModel : ViewModelBase
     public ViewModelBase CurrentPage
     {
         get => _currentPage;
-        private set => SetProperty(ref _currentPage, value);
+        private set
+        {
+            if (SetProperty(ref _currentPage, value))
+            {
+                SyncNavSelection();
+            }
+        }
     }
 
     public GameInstance? SelectedInstance
@@ -244,7 +283,18 @@ public sealed class MainViewModel : ViewModelBase
         if (page is not null) CurrentPage = page;
     }
 
-    public void Navigate(NavItem item) => CurrentPage = item.ViewModel;
+    public void Navigate(NavItem item)
+    {
+        CurrentPage = item.ViewModel;
+    }
+
+    private void SyncNavSelection()
+    {
+        foreach (var page in Pages)
+        {
+            page.IsSelected = ReferenceEquals(page.ViewModel, _currentPage);
+        }
+    }
 
     /// <summary>Resolves the page to show at startup from the StartupPage setting.</summary>
     private ViewModelBase ResolveStartupPage(ViewModelBase fallback)

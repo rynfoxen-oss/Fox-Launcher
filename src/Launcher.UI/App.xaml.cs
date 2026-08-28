@@ -234,6 +234,8 @@ public partial class App : Application
         container.Register<ModSearcher>();
         container.Register<DependencyResolver>();
         container.Register<UpdateService>();
+        container.Register<NotificationService>();
+        container.Register<SkinLibraryService>();
 
         var hub = new ServiceHub
         {
@@ -271,6 +273,8 @@ public partial class App : Application
               Updater = container.Resolve<UpdateService>(),
               Discord = container.Resolve<DiscordRpcService>(),
               Localization = container.Resolve<LocalizationService>(),
+              Notifications = container.Resolve<NotificationService>(),
+              SkinLibrary = container.Resolve<SkinLibraryService>(),
               Container = container
         };
         container.RegisterInstance(hub);
@@ -287,6 +291,8 @@ public partial class App : Application
         container.Register<LogsViewModel>();
         container.Register<SettingsViewModel>();
         container.Register<AccountsViewModel>();
+        container.Register<SkinsViewModel>();
+        container.Register<SearchViewModel>();
         container.Register<MainViewModel>();
 
         return hub;
@@ -422,7 +428,19 @@ public partial class App : Application
                 });
 
                 if (skipped || reminded) return;
-                if (!hub.Settings.AutoUpdate) return;
+                if (!hub.Settings.AutoUpdate)
+                {
+                    // Auto-popups are off: still surface the availability as a toast.
+                    Dispatcher.Invoke(() => hub.Notifications.ShowAction(
+                        Launcher.Models.NotificationLevel.Info,
+                        $"Update available · v{info.LatestVersion}",
+                        info.Notes is { Length: > 0 } notes
+                            ? notes.Split('\n')[0].Trim()
+                            : "A new version of FoxLauncher is ready.",
+                        "Show details",
+                        () => hub.OpenUpdateDialog?.Invoke(info)));
+                    return;
+                }
 
                 // Auto-popup is opt-in via AutoUpdate. Manual dismissals via the
                 // banner / dialog feed back into SkippedUpdateVersions.

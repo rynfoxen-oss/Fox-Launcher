@@ -89,7 +89,7 @@
                                     <StackPanel Grid.Column="1" Margin="14,0,14,0" VerticalAlignment="Center">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="{Binding Name}" Style="{StaticResource H2Text}" FontSize="16"/>
-                                            <TextBlock Text="&#xE734;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource WarningBrush}"
+                                            <TextBlock Text="&#xE734;" FontFamily="{StaticResource IconFont}" Foreground="{StaticResource WarningBrush}"
                                                        Margin="8,0,0,0" Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVisibility}}"/>
                                             <TextBlock Text="{Binding Version}" Style="{StaticResource CaptionText}"
                                                        Foreground="{StaticResource AccentBrush}" Margin="10,0,0,0"

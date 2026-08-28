@@ -31,6 +31,7 @@ public partial class SkinViewer : UserControl
             if (e.Timestamp - _lastClickTime < 500)
                 ResetView();
             _lastClickTime = e.Timestamp;
+            CancelCameraTween();
             Viewport.CaptureMouse();
             _dragging = true;
             _lastDrag = e.GetPosition(Viewport);
@@ -51,6 +52,7 @@ public partial class SkinViewer : UserControl
         };
         Viewport.MouseWheel += (_, e) =>
         {
+            CancelCameraTween();
             _distance = Math.Clamp(_distance * (e.Delta > 0 ? 0.92 : 1.08), _minDistance, _maxDistance);
             ApplyCamera();
         };
@@ -62,6 +64,102 @@ public partial class SkinViewer : UserControl
         _pitch = -0.12;
         _distance = _framingDistance;
         ApplyCamera();
+    }
+
+    // ------------------------------------------------------------------ camera presets
+
+    private readonly object _camLock = new();
+    private CancellationTokenSource? _camTweenCts;
+    private bool _reduceMotion;
+
+    /// <summary>Orbits the camera to look at the front of the figure.</summary>
+    public void LookFront() => TweenCamera(targetYaw: 0, targetPitch: -0.12);
+
+    /// <summary>Orbits the camera to look at the back of the figure.</summary>
+    public void LookBack() => TweenCamera(targetYaw: Math.PI, targetPitch: -0.12);
+
+    /// <summary>Orbits the camera to the figure's left side.</summary>
+    public void LookLeft() => TweenCamera(targetYaw: Math.PI / 2, targetPitch: -0.12);
+
+    /// <summary>Orbits the camera to the figure's right side.</summary>
+    public void LookRight() => TweenCamera(targetYaw: -Math.PI / 2, targetPitch: -0.12);
+
+    /// <summary>Looks down at the figure from above.</summary>
+    public void LookTop() => TweenCamera(targetYaw: 0, targetPitch: 1.45);
+
+    /// <summary>Restores the default three-quarter framing and zoom.</summary>
+    public void ResetCamera() => TweenCamera(targetYaw: 0.785, targetPitch: -0.12, resetZoom: true);
+
+    /// <summary>Zooms closer (proportional).</summary>
+    public void ZoomIn() => TweenCamera(distanceFactor: 0.68);
+
+    /// <summary>Zooms further away (proportional).</summary>
+    public void ZoomOut() => TweenCamera(distanceFactor: 1 / 0.68);
+
+    private void TweenCamera(double? targetYaw = null, double? targetPitch = null,
+        double? distanceFactor = null, bool resetZoom = false)
+    {
+        double startYaw = _yaw, startPitch = _pitch, startDist = _distance;
+        double endYaw = NormalizeAngle(targetYaw ?? startYaw);
+        double endPitch = targetPitch ?? startPitch;
+        double endDist = resetZoom
+            ? _framingDistance
+            : distanceFactor.HasValue
+                ? Math.Clamp(startDist * distanceFactor.Value, _minDistance, _maxDistance)
+                : startDist;
+
+        // Shortest rotation: never spin more than 180° between two views.
+        var dy = endYaw - startYaw;
+        while (dy > Math.PI) dy -= Math.Tau;
+        while (dy < -Math.PI) dy += Math.Tau;
+        endYaw = startYaw + dy;
+
+        if (_reduceMotion)
+        {
+            _yaw = endYaw;
+            _pitch = endPitch;
+            _distance = endDist;
+            ApplyCamera();
+            return;
+        }
+
+        lock (_camLock) CancelCameraTween();
+        var cts = new CancellationTokenSource();
+        _camTweenCts = cts;
+        var sw = Stopwatch.StartNew();
+
+        void Tick(object? s, EventArgs e)
+        {
+            double t = Math.Min(1, sw.Elapsed.TotalSeconds / 0.26);
+            double eased = t * t * (3 - 2 * t);
+            _yaw = startYaw + (endYaw - startYaw) * eased;
+            _pitch = startPitch + (endPitch - startPitch) * eased;
+            _distance = startDist + (endDist - startDist) * eased;
+            ApplyCamera();
+
+            if (cts.IsCancellationRequested || t >= 1)
+            {
+                CompositionTarget.Rendering -= Tick;
+                if (_camTweenCts == cts) _camTweenCts = null;
+            }
+        }
+
+        CompositionTarget.Rendering += Tick;
+    }
+
+    private void CancelCameraTween()
+    {
+        var cts = _camTweenCts;
+        if (cts is null) return;
+        _camTweenCts = null;
+        cts.Cancel();
+    }
+
+    private static double NormalizeAngle(double angle)
+    {
+        while (angle > Math.PI) angle -= Math.Tau;
+        while (angle < -Math.PI) angle += Math.Tau;
+        return angle;
     }
 
     /// <summary>Default skin (Steve) bundled as a project resource so the preview
@@ -112,6 +210,18 @@ public partial class SkinViewer : UserControl
         set => SetValue(ModelPreferenceProperty, value);
     }
 
+    /// <summary>When true, renders each body part with a distinct solid color
+    /// so geometry and proportions can be verified without a skin texture.</summary>
+    public static readonly DependencyProperty DebugModeProperty =
+        DependencyProperty.Register(nameof(DebugMode), typeof(bool), typeof(SkinViewer),
+            new PropertyMetadata(false, (d, _) => ((SkinViewer)d).RenderChanged()));
+
+    public bool DebugMode
+    {
+        get => (bool)GetValue(DebugModeProperty);
+        set => SetValue(DebugModeProperty, value);
+    }
+
     /// <summary>Variant declared by the account: "CLASSIC", "SLIM" or empty.</summary>
     public static readonly DependencyProperty SkinVariantProperty =
         DependencyProperty.Register(nameof(SkinVariant), typeof(string), typeof(SkinViewer),
@@ -156,6 +266,52 @@ public partial class SkinViewer : UserControl
         set => SetValue(RenderQualityProperty, value);
     }
 
+    /// <summary>Initial camera view when the control loads: "Auto" (three-quarter),
+    /// "Front", "Back", "Left", "Right" or "Top". The figure stays fully
+    /// draggable afterwards.</summary>
+    public static readonly DependencyProperty ViewProperty =
+        DependencyProperty.Register(nameof(View), typeof(string), typeof(SkinViewer),
+            new PropertyMetadata("Auto", (d, _) => ((SkinViewer)d).CameraViewChanged()));
+
+    public string View
+    {
+        get => (string)GetValue(ViewProperty);
+        set => SetValue(ViewProperty, value);
+    }
+
+    private void CameraViewChanged()
+    {
+        if (IsLoaded) SetStartCamera();
+    }
+
+    private void SetStartCamera()
+    {
+        switch (View.Trim().ToLowerInvariant())
+        {
+            case "front":
+                _yaw = 0;
+                _pitch = -0.12;
+                break;
+            case "back":
+                _yaw = Math.PI;
+                _pitch = -0.12;
+                break;
+            case "left":
+                _yaw = Math.PI / 2;
+                _pitch = -0.12;
+                break;
+            case "right":
+                _yaw = -Math.PI / 2;
+                _pitch = -0.12;
+                break;
+            case "top":
+                _yaw = 0;
+                _pitch = 1.45;
+                break;
+        }
+        ApplyCamera();
+    }
+
     private CancellationTokenSource? _loadCts;
     private SkinCache? _cache;
 
@@ -181,6 +337,12 @@ public partial class SkinViewer : UserControl
     private bool _framedOnce;
     private int _lastClickTime;
 
+    // Throttles the idle/auto-rotate animation to ~30 FPS so it never runs at the
+    // monitor's full refresh rate (e.g. 144Hz). Angles only change every
+    // TargetFrameMs, so WPF has nothing to re-render in the skipped frames.
+    private const double TargetFrameMs = 1000.0 / 30.0;
+    private double _lastPoseMs;
+
     private double _yaw = 0.785;
     private double _pitch = -0.12;
     private double _distance;
@@ -191,8 +353,10 @@ public partial class SkinViewer : UserControl
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        _reduceMotion = AppHost.Services?.Settings.DisableAnimations ?? false;
         _clock = Stopwatch.StartNew();
         AnimationChanged();
+        SetStartCamera();
         Refresh();
     }
 
@@ -225,8 +389,15 @@ public partial class SkinViewer : UserControl
 
     private void OnRendering(object? sender, EventArgs e)
     {
-        double t = _clock?.Elapsed.TotalSeconds ?? 0;
-        UpdatePose(t);
+        double now = _clock?.Elapsed.TotalMilliseconds ?? 0;
+
+        // Frame limiter: only re-pose the figure about 30 times a second. Between
+        // those ticks nothing is changed, so WPF skips redrawing the skipped
+        // frames entirely instead of capping out the GPU at the monitor's rate.
+        if (now - _lastPoseMs < TargetFrameMs) return;
+        _lastPoseMs = now;
+
+        UpdatePose(now / 1000.0);
     }
 
     private void UpdatePose(double t)
@@ -328,25 +499,55 @@ public partial class SkinViewer : UserControl
         return ModelDetector.Detect(tex) ?? SkinModelType.Classic;
     }
 
+    private static readonly Dictionary<SkinPart, Color> DebugColors = new()
+    {
+        [SkinPart.Head] = Colors.Red,
+        [SkinPart.Body] = Colors.Green,
+        [SkinPart.RightArm] = Colors.Yellow,
+        [SkinPart.LeftArm] = Colors.Blue,
+        [SkinPart.RightLeg] = Colors.Orange,
+        [SkinPart.LeftLeg] = Colors.Purple,
+    };
+
     private void BuildFigure(SkinTexture tex, SkinModelType type, ImageSource image)
     {
         IReadOnlyList<PartModel> parts = MinecraftPlayerModel.Build(type, tex.Width, tex.Height);
 
-        var brush = new ImageBrush(image)
-        {
-            Stretch = Stretch.Fill,
-            ViewboxUnits = BrushMappingMode.Absolute,
-            ViewportUnits = BrushMappingMode.Absolute,
-            Viewbox = new Rect(0, 0, ((BitmapSource) image).PixelWidth, ((BitmapSource) image).PixelHeight),
-            Viewport = new Rect(0, 0, 1, 1)
-        };
-        RenderOptions.SetBitmapScalingMode(brush, BitmapScalingMode.NearestNeighbor);
-        brush.Freeze();
+        Material material;
+        Material backMaterial;
 
-        var material = new DiffuseMaterial(brush);
-        material.Freeze();
-        var back = new DiffuseMaterial(brush) { Color = Color.FromRgb(120, 120, 120) };
-        back.Freeze();
+        if (DebugMode)
+        {
+            // Debug mode: each part gets a distinct solid color so geometry
+            // and proportions can be verified without a skin texture.
+            // The actual per-part color is applied inside the loop below.
+            material = new DiffuseMaterial(Brushes.White);
+            material.Freeze();
+            backMaterial = new DiffuseMaterial(Brushes.Gray);
+            backMaterial.Freeze();
+        }
+        else
+        {
+            // WPF 3D samples DiffuseMaterial textures with bilinear filtering, so
+            // mapping a raw 64px skin smears every texel diagonally across the model.
+            // Pre-upscaling (nearest-neighbour, crisp) makes that sampling effectively
+            // sharp and silky at full magnification.
+            var display = ScaleForQuality((BitmapSource)image, RenderQuality);
+            var brush = new ImageBrush(display)
+            {
+                Stretch = Stretch.Fill,
+                ViewboxUnits = BrushMappingMode.Absolute,
+                ViewportUnits = BrushMappingMode.Absolute,
+                Viewbox = new Rect(0, 0, display.PixelWidth, display.PixelHeight),
+                Viewport = new Rect(0, 0, 1, 1)
+            };
+            brush.Freeze();
+
+            material = new DiffuseMaterial(brush);
+            material.Freeze();
+            backMaterial = new DiffuseMaterial(brush) { Color = Color.FromRgb(120, 120, 120) };
+            backMaterial.Freeze();
+        }
 
         _rig.Clear();
         _rootGroup = new Model3DGroup { Transform = _rootTransform };
@@ -371,16 +572,115 @@ public partial class SkinViewer : UserControl
             transform.Children.Add(new TranslateTransform3D(pivot));
 
             var group = new Model3DGroup { Transform = transform };
-            group.Children.Add(ToWpf(part.Base, material, back));
-            group.Children.Add(ToWpf(part.Overlay, material, back));
+
+            if (DebugMode)
+            {
+                var debugColor = DebugColors.TryGetValue(part.Part, out var c) ? c : Colors.White;
+                var debugMat = new DiffuseMaterial(new SolidColorBrush(debugColor));
+                debugMat.Freeze();
+                var debugBack = new DiffuseMaterial(new SolidColorBrush(Color.FromRgb(
+                    (byte)(debugColor.R * 0.4),
+                    (byte)(debugColor.G * 0.4),
+                    (byte)(debugColor.B * 0.4))));
+                debugBack.Freeze();
+                group.Children.Add(ToWpf(part.Base, debugMat, debugBack));
+                group.Children.Add(ToWpf(part.Overlay, debugMat, debugBack));
+            }
+            else
+            {
+                group.Children.Add(ToWpf(part.Base, material, backMaterial));
+                group.Children.Add(ToWpf(part.Overlay, material, backMaterial));
+            }
+
             _rootGroup.Children.Add(group);
 
             _rig.Add(new PartRig { Group = group, Part = part.Part, Pivot = pivot, Yaw = yaw, Pitch = pitch });
         }
 
-        FigureRoot.Content = _rootGroup;
+        if (ShowBody && ShadowModel is not null)
+        {
+            var root = new Model3DGroup();
+            root.Children.Add(_rootGroup);
+            root.Children.Add(ShadowModel);
+            FigureRoot.Content = root;
+        }
+        else
+        {
+            FigureRoot.Content = _rootGroup;
+        }
         UpdateFraming();
         ApplyQuality();
+    }
+
+    /// <summary>Upscales the raw skin texture before mapping so WPF's bilinear
+    /// 3D sampling doesn't smear 64px pixels over the whole model. Low keeps the
+    /// texture pixel-native; Medium scales ×4 and High ×8.</summary>
+    private static BitmapSource ScaleForQuality(BitmapSource source, string quality)
+    {
+        int factor = quality.ToLowerInvariant() switch
+        {
+            "low" => 1,
+            "high" => 8,
+            _ => 4
+        };
+        if (factor <= 1 || source.PixelWidth * factor > 4096) return source;
+        var scaled = new TransformedBitmap(source, new ScaleTransform(factor, factor));
+        RenderOptions.SetBitmapScalingMode(scaled, BitmapScalingMode.NearestNeighbor);
+        scaled.Freeze();
+        return scaled;
+    }
+
+    /// <summary>A soft radial "floor shadow" under the figure's feet so the preview
+    /// feels grounded instead of floating in the void. Static (does not ride the
+    /// idle bob or auto-spin).</summary>
+    private static readonly GeometryModel3D? ShadowModel = BuildShadow();
+
+    private static GeometryModel3D? BuildShadow()
+    {
+        try
+        {
+            var gradient = new RadialGradientBrush(Color.FromArgb(80, 0, 0, 0), Colors.Transparent);
+            gradient.Freeze();
+            var visual = new DrawingVisual();
+            using (var dc = visual.RenderOpen())
+            {
+                dc.DrawRectangle(gradient, null, new Rect(0, 0, 64, 64));
+            }
+            var image = new RenderTargetBitmap(64, 64, 96, 96, PixelFormats.Pbgra32);
+            image.Render(visual);
+            image.Freeze();
+
+            var material = new DiffuseMaterial(new ImageBrush(image));
+            material.Freeze();
+
+            var mesh = new MeshGeometry3D();
+            const int segments = 48;
+            const double radius = 8.5;
+            const double y = 0.06;
+            mesh.Positions.Add(new Point3D(0, y, 0));
+            mesh.Normals.Add(new Vector3D(0, 1, 0));
+            for (int i = 0; i <= segments; i++)
+            {
+                double a = i * Math.PI * 2 / segments;
+                mesh.Positions.Add(new Point3D(Math.Cos(a) * radius, y, Math.Sin(a) * radius));
+                mesh.Normals.Add(new Vector3D(0, 1, 0));
+            }
+            for (int i = 0; i < segments; i++)
+            {
+                mesh.TriangleIndices.Add(0);
+                mesh.TriangleIndices.Add(i + 1);
+                mesh.TriangleIndices.Add(i + 2);
+            }
+            mesh.Freeze();
+
+            var model = new GeometryModel3D { Geometry = mesh, Material = material, BackMaterial = material };
+            model.Freeze();
+            return model;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static GeometryModel3D ToWpf(MeshData mesh, Material material, Material back)

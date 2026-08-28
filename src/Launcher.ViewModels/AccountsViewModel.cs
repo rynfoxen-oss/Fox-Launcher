@@ -1,4 +1,3 @@
-using Launcher.Authentication;
 using Launcher.Models;
 using Launcher.Utils;
 
@@ -18,10 +17,6 @@ public sealed class AccountsViewModel : ViewModelBase
     private string _verificationUri = "";
     private string _offlineName = "";
     private string _status = "";
-    private string _activeSkinUrl = "";
-    private string _activeSkinVariant = "";
-    private bool _isSlimVariant;
-    private bool _isSkinBusy;
 
     public AccountsViewModel(ServiceHub services) : base(services)
     {
@@ -34,8 +29,6 @@ public sealed class AccountsViewModel : ViewModelBase
         });
         RemoveCommand = new RelayCommand(Remove);
         CopyCodeCommand = new RelayCommand(() => SetClipboard(DeviceCode));
-        ChangeSkinCommand = new AsyncRelayCommand(ChangeSkinAsync);
-        ResetSkinCommand = new AsyncRelayCommand(ResetSkinAsync);
 
         services.Accounts.Changed += RefreshAccounts;
         RefreshAccounts();
@@ -47,8 +40,6 @@ public sealed class AccountsViewModel : ViewModelBase
     public RelayCommand SwitchCommand { get; }
     public RelayCommand RemoveCommand { get; }
     public RelayCommand CopyCodeCommand { get; }
-    public AsyncRelayCommand ChangeSkinCommand { get; }
-    public AsyncRelayCommand ResetSkinCommand { get; }
 
     public IReadOnlyList<Account> Accounts
     {
@@ -98,90 +89,7 @@ public sealed class AccountsViewModel : ViewModelBase
         private set => SetProperty(ref _status, value);
     }
 
-    public string ActiveSkinUrl
-    {
-        get => _activeSkinUrl;
-        private set
-        {
-            if (SetProperty(ref _activeSkinUrl, value)) OnPropertyChanged(nameof(SkinHint));
-        }
-    }
-
-    public bool IsSlimVariant
-    {
-        get => _isSlimVariant;
-        set => SetProperty(ref _isSlimVariant, value);
-    }
-
-    /// <summary>Model variant declared by the active account ("CLASSIC"/"SLIM"/"").</summary>
-    public string ActiveSkinVariant
-    {
-        get => _activeSkinVariant;
-        private set => SetProperty(ref _activeSkinVariant, value);
-    }
-
-    /// <summary>Whether the 3D skin preview is enabled (persisted in settings).</summary>
-    public bool SkinPreview3D
-    {
-        get => Services.Settings.SkinPreview3D;
-        set { Services.Settings.SkinPreview3D = value; OnPropertyChanged(); }
-    }
-
-    /// <summary>Preview model preference: "Auto", "Classic" or "Slim" (persisted).</summary>
-    public string SkinModelPreference
-    {
-        get => Services.Settings.SkinModelPreference;
-        set
-        {
-            Services.Settings.SkinModelPreference = value;
-            IsSlimVariant = value == "Slim";
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(IsModelAuto));
-            OnPropertyChanged(nameof(IsModelClassic));
-            OnPropertyChanged(nameof(IsModelSlim));
-        }
-    }
-
-    /// <summary>Whether the preview idle animation runs (persisted).</summary>
-    public bool SkinAnimation
-    {
-        get => Services.Settings.SkinAnimation;
-        set { Services.Settings.SkinAnimation = value; OnPropertyChanged(); }
-    }
-
-    public bool IsModelAuto
-    {
-        get => SkinModelPreference == "Auto";
-        set { if (value) SkinModelPreference = "Auto"; }
-    }
-
-    public bool IsModelClassic
-    {
-        get => SkinModelPreference == "Classic";
-        set { if (value) SkinModelPreference = "Classic"; }
-    }
-
-    public bool IsModelSlim
-    {
-        get => SkinModelPreference == "Slim";
-        set { if (value) SkinModelPreference = "Slim"; }
-    }
-
-    public bool IsSkinBusy
-    {
-        get => _isSkinBusy;
-        private set => SetProperty(ref _isSkinBusy, value);
-    }
-
     public bool HasActiveAccount => Active is not null;
-
-    /// <summary>Caption under the skin preview explaining what is shown.</summary>
-    public string SkinHint =>
-        string.IsNullOrWhiteSpace(ActiveSkinUrl)
-            ? "No custom skin yet — the default skin is shown. Click Change skin to set one."
-            : Active?.Type == AccountType.Microsoft
-                ? "This skin is synced to your Microsoft account."
-                : "Local skin for this offline profile. It appears in-game only on Fabric instances.";
 
     private async Task MicrosoftLoginAsync()
     {
@@ -243,116 +151,10 @@ public sealed class AccountsViewModel : ViewModelBase
         Status = $"Removed '{account.Username}'.";
     }
 
-    private async Task ChangeSkinAsync()
-    {
-        var account = Active;
-        if (account is null) return;
-
-        var path = Services.PickFileDialog?.Invoke("PNG images (*.png)|*.png|All files (*.*)|*.*");
-        if (string.IsNullOrEmpty(path)) return;
-
-        IsSkinBusy = true;
-        try
-        {
-            if (account.Type == AccountType.Microsoft && !string.IsNullOrEmpty(account.AccessToken))
-            {
-                Status = "Uploading skin...";
-                var variant = IsSlimVariant ? "SLIM" : "CLASSIC";
-                var url = await Services.MicrosoftAuth.ChangeSkinAsync(account.AccessToken, variant, path);
-                if (url is null)
-                {
-                    Status = "Skin uploaded, but the server did not return a preview URL.";
-                }
-                else
-                {
-                    account.SkinUrl = url;
-                    account.SkinVariant = variant;
-                    Services.Accounts.SaveAccount(account);
-                    ActiveSkinUrl = url;
-                    ActiveSkinVariant = variant;
-                    Status = "Skin updated. It will appear in-game.";
-                }
-            }
-            else if (account.Type == AccountType.Offline)
-            {
-                var dest = Paths.LocalSkinFile(account.Uuid);
-                Directory.CreateDirectory(Paths.Skins);
-                File.Copy(path, dest, overwrite: true);
-
-                account.SkinUrl = new Uri(dest).AbsoluteUri;
-                account.SkinVariant = IsSlimVariant ? "SLIM" : "CLASSIC";
-                Services.Accounts.SaveAccount(account);
-                ActiveSkinUrl = account.SkinUrl;
-                Status = "Skin saved for this offline profile. It is shown in the launcher; play it on a Fabric instance to see it in-game.";
-            }
-            else
-            {
-                Status = "Skin uploads require a signed-in Microsoft account.";
-            }
-        }
-        catch (Exception ex)
-        {
-            Status = $"Skin update failed: {ex.Message}";
-            Services.Log.Error("Skin upload failed", ex);
-        }
-        finally
-        {
-            IsSkinBusy = false;
-        }
-    }
-
-    private async Task ResetSkinAsync()
-    {
-        var account = Active;
-        if (account is null) return;
-
-        IsSkinBusy = true;
-        try
-        {
-            if (account.Type == AccountType.Microsoft && !string.IsNullOrEmpty(account.AccessToken))
-            {
-                Status = "Resetting skin...";
-                await Services.MicrosoftAuth.ResetSkinAsync(account.AccessToken);
-                account.SkinUrl = "";
-                account.SkinVariant = "";
-                Services.Accounts.SaveAccount(account);
-                ActiveSkinUrl = "";
-                ActiveSkinVariant = "";
-                Status = "Skin reset to the default.";
-            }
-            else if (account.Type == AccountType.Offline)
-            {
-                var dest = Paths.LocalSkinFile(account.Uuid);
-                if (File.Exists(dest)) File.Delete(dest);
-                account.SkinUrl = "";
-                account.SkinVariant = "";
-                Services.Accounts.SaveAccount(account);
-                ActiveSkinUrl = "";
-                ActiveSkinVariant = "";
-                Status = "Skin reset to the default.";
-            }
-            else
-            {
-                Status = "Only Microsoft and offline accounts have a skin to reset.";
-            }
-        }
-        catch (Exception ex)
-        {
-            Status = $"Skin reset failed: {ex.Message}";
-            Services.Log.Error("Skin reset failed", ex);
-        }
-        finally
-        {
-            IsSkinBusy = false;
-        }
-    }
-
     private void RefreshAccounts()
     {
         Accounts = Services.Accounts.Accounts;
         Active = Services.Accounts.Active;
-        ActiveSkinUrl = Active?.SkinUrl ?? "";
-        ActiveSkinVariant = Active?.SkinVariant ?? "";
         OnPropertyChanged(nameof(HasActiveAccount));
     }
 

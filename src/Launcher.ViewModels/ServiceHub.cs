@@ -51,6 +51,8 @@ public sealed class ServiceHub
     public required UpdateService Updater { get; init; }
     public required DiscordRpcService Discord { get; init; }
     public required LocalizationService Localization { get; init; }
+    public required NotificationService Notifications { get; init; }
+    public required SkinLibraryService SkinLibrary { get; init; }
     public required DiContainer Container { get; init; }
 
     /// <summary>Shows a modal message box (wired by the UI layer).</summary>

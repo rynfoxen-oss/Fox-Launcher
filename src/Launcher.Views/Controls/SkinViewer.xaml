@@ -20,6 +20,7 @@
                                 <AmbientLight Color="#FF656565"/>
                                 <DirectionalLight Color="#FFEBEBEB" Direction="0.5,-1,-0.6"/>
                                 <DirectionalLight Color="#FFA8A8A8" Direction="-0.55,-0.65,-0.5"/>
+                                <DirectionalLight Color="#FF6E6E6E" Direction="-0.25,0.35,0.85"/>
                             </Model3DGroup>
                         </ModelVisual3D.Content>
                     </ModelVisual3D>

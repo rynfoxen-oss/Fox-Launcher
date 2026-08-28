@@ -1,0 +1,401 @@
+<UserControl x:Class="Launcher.Views.Pages.SkinsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="clr-namespace:Launcher.Views.Controls"
+             xmlns:conv="clr-namespace:Launcher.Views.Converters">
+    <UserControl.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+        <conv:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility"/>
+        <conv:InverseBooleanConverter x:Key="InverseBoolean"/>
+        <Style x:Key="CameraButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
+            <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}"/>
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="ToolTipService.ShowDuration" Value="4000"/>
+        </Style>
+        <Style x:Key="GridViewToggleStyle" TargetType="ToggleButton">
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+            <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="9"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="MinHeight" Value="40"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusVisualRounded}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{DynamicResource ButtonRadius}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentBrush}"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="28,24,28,0">
+            <TextBlock Text="Skins" Style="{StaticResource H1Text}"/>
+            <TextBlock Text="Your skin library. Apply any saved skin to the active account, or copy it to disk."
+                       Style="{StaticResource SecondaryText}" Margin="0,6,0,0"/>
+        </StackPanel>
+
+        <Grid Grid.Row="1" Margin="28,16,28,24">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="340"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- ============ Preview panel ============ -->
+            <Border Grid.Column="0" Style="{StaticResource CardPanel}" Padding="16"
+                    Background="{DynamicResource SurfaceAltBrush}"
+                    ClipToBounds="True">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Preview + details: the preview card lives in a flexible (*)
+                         row so the loaded figure scales down to fit (object-fit:
+                         contain) instead of forcing the text below it off-screen. -->
+                    <Grid Grid.Row="0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel>
+                            <TextBlock Text="Preview" Style="{StaticResource SectionTitleText}"/>
+                            <TextBlock Text="Your skin in crisp 2D — the full character with all outer layers, updating live when you change or import a skin."
+                                       Style="{StaticResource CaptionText}" Margin="0,4,0,12"/>
+                        </StackPanel>
+
+                        <Border Grid.Row="1" Background="{DynamicResource SurfaceBrush}" CornerRadius="16"
+                                Padding="10" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                MinHeight="120" ClipToBounds="True"
+                                VerticalAlignment="Stretch">
+                            <ctl:Skin2DPreview TextureUrl="{Binding PreviewUrl}"
+                                               ModelPreference="{Binding PreviewModelPreference}"/>
+                        </Border>
+
+                        <StackPanel Grid.Row="2">
+                            <TextBlock Text="{Binding SelectionName}" Style="{StaticResource H2Text}" Margin="0,14,0,0"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding SelectionDetails}" Style="{StaticResource MutedText}" Margin="0,4,0,0"/>
+
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Stretch" Margin="0,16,0,0">
+                                <Button Content="Rename" Style="{StaticResource GhostButton}" Margin="0,0,6,0"
+                                        Command="{Binding RenameCommand}" HorizontalAlignment="Left"
+                                        IsEnabled="{Binding HasSelection}"/>
+                                <Button Content="Export" Style="{StaticResource GhostButton}" Margin="0,0,6,0"
+                                        Command="{Binding ExportCommand}" HorizontalAlignment="Left"
+                                        IsEnabled="{Binding HasSelection}"/>
+                                <Button Content="Delete" Style="{StaticResource DangerGhostButton}"
+                                        Command="{Binding DeleteCommand}" HorizontalAlignment="Left"
+                                        IsEnabled="{Binding HasSelection}"/>
+                            </StackPanel>
+
+                            <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="8" Padding="10" Margin="0,12,0,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE77B;" FontFamily="{StaticResource IconFont}" FontSize="14"
+                                               Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
+                                    <StackPanel Margin="10,0,0,0">
+                                        <TextBlock Text="{Binding ActiveAccountName, TargetNullValue='No account', FallbackValue='No account'}"
+                                                   Style="{StaticResource BaseText}"/>
+                                        <TextBlock Text="Apply skins after adding an account." Style="{StaticResource CaptionText}"
+                                                   Visibility="{Binding HasActiveAccount, Converter={StaticResource InverseBoolToVisibility}}"/>
+                                        <TextBlock Text="Applies the selected skin to this account." Style="{StaticResource CaptionText}"
+                                                   Visibility="{Binding HasActiveAccount, Converter={StaticResource BoolToVisibility}}"/>
+                                        <Button Content="Manage accounts" Style="{StaticResource GhostButton}" Padding="8,3"
+                                                Margin="0,6,0,0" HorizontalAlignment="Left" FontSize="11"
+                                                Command="{Binding NavigateAccountsCommand}"
+                                                Visibility="{Binding HasActiveAccount, Converter={StaticResource InverseBoolToVisibility}}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Fixed bottom action: always visible, never scrolled away. -->
+                    <StackPanel Grid.Row="1" Margin="0,10,0,0">
+                        <Button Content="Apply to active account"
+                                Command="{Binding ApplyCommand}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                                    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasSelection}" Value="False">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ============ Library ============ -->
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Toolbar -->
+                <Border Grid.Row="0" Style="{StaticResource CardPanel}" Padding="10">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource GlobalSearchBox}" AutomationProperties.Name="Search skins"
+                                 ToolTip="Search by name or file"/>
+                        <TextBlock Grid.Column="1" Text="{Binding CountLabel}" Style="{StaticResource CaptionText}"
+                                   Margin="12,0,12,0" VerticalAlignment="Center"/>
+                        <ComboBox Grid.Column="2" Width="130" Style="{StaticResource InputComboBox}"
+                                  SelectedValue="{Binding SortBy}" SelectedValuePath="Content"
+                                  AutomationProperties.Name="Sort skins">
+                            <ComboBoxItem Content="Newest"/>
+                            <ComboBoxItem Content="Name"/>
+                            <ComboBoxItem Content="Favorites first"/>
+                        </ComboBox>
+<ToggleButton Grid.Column="3" Style="{StaticResource GridViewToggleStyle}" Margin="8,0,0,0"
+                          IsChecked="{Binding IsGrid}" ToolTip="Grid / list view" AutomationProperties.Name="Toggle view">
+                            <TextBlock Text="&#xE80A;" FontFamily="{StaticResource IconFont}" FontSize="13"/>
+                        </ToggleButton>
+                        <Button Grid.Column="4" Content="Import…" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0"
+                                Command="{Binding ImportCommand}" AutomationProperties.Name="Import skin"/>
+                    </Grid>
+                </Border>
+
+                <!-- Grid view -->
+                <Grid Grid.Row="1" Margin="0,12,0,0"
+                      Visibility="{Binding IsGrid, Converter={StaticResource BoolToVisibility}}">
+                    <Border Style="{StaticResource EmptyStateCard}"
+                            Visibility="{Binding Skins.Count, Converter={StaticResource InverseBoolToVisibility}}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="&#xE81C;" FontFamily="{StaticResource IconFont}" FontSize="34"
+                                       Foreground="{DynamicResource TextMuted}" HorizontalAlignment="Center"/>
+                            <TextBlock Text="No skins in your library yet." Style="{StaticResource SectionTitleText}"
+                                       HorizontalAlignment="Center" Margin="0,10,0,4"/>
+                            <TextBlock Text="Import a Minecraft skin PNG to preview it in 3D and apply it to your accounts."
+                                       Style="{StaticResource MutedText}" HorizontalAlignment="Center" TextWrapping="Wrap"
+                                       MaxWidth="360" TextAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                    <ListBox x:Name="SkinGrid" ItemsSource="{Binding Skins}"
+                             SelectedItem="{Binding SelectedSkin, Mode=TwoWay}"
+                             Visibility="{Binding Skins.Count, Converter={StaticResource BoolToVisibility}}"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel IsItemsHost="True"/>
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.Style>
+                            <Style TargetType="ListBox" BasedOn="{StaticResource PlainListBox}">
+                                <Setter Property="ItemContainerStyle">
+                                    <Setter.Value>
+                                        <Style TargetType="ListBoxItem">
+                                            <Setter Property="Margin" Value="0,0,10,10"/>
+                                            <Setter Property="Focusable" Value="True"/>
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="ListBoxItem">
+                                                        <Border x:Name="Bd" Style="{StaticResource SkinCard}" Width="148"
+                                                                Padding="0" Background="{DynamicResource CardBrush}"
+                                                                BorderThickness="1.5">
+                                                            <Grid>
+                                                                <StackPanel>
+                                                                    <Border Height="96" Background="{DynamicResource SurfaceBrush}"
+                                                                            CornerRadius="10,10,0,0"
+                                                                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                                                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
+                                                                                    VerticalAlignment="Center">
+                                                                            <ctl:SkinThumbnail SourcePath="{Binding FilePath}"/>
+                                                                        </StackPanel>
+                                                                    </Border>
+                                                                    <TextBlock Text="{Binding Name}" Style="{StaticResource BaseText}"
+                                                                               FontSize="12.5" FontWeight="SemiBold"
+                                                                               Margin="10,8,10,2" TextTrimming="CharacterEllipsis"
+                                                                               TextAlignment="Center"/>
+                                                                    <TextBlock Style="{StaticResource CaptionText}" Margin="10,0,10,0" HorizontalAlignment="Center">
+                                                        <TextBlock.Text>
+                                                            <MultiBinding StringFormat="{}{0} · {1}">
+                                                                <Binding Path="ModelLabel"/>
+                                                                <Binding Path="DimensionsLabel"/>
+                                                            </MultiBinding>
+                                                        </TextBlock.Text>
+                                                    </TextBlock>
+                                                                    <UniformGrid Columns="3" Margin="0,8,0,6">
+                                                                        <Button Style="{StaticResource IconButton}" Padding="6"
+                                                                                Command="{Binding DataContext.ToggleFavoriteCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                                                CommandParameter="{Binding}" ToolTip="Favorite">
+                                                                            <TextBlock FontFamily="{StaticResource IconFont}" FontSize="13">
+                                                                                <TextBlock.Style>
+                                                                                    <Style TargetType="TextBlock">
+                                                                                        <Setter Property="Text" Value="&#xE734;"/>
+                                                                                        <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+                                                                                        <Style.Triggers>
+                                                                                            <DataTrigger Binding="{Binding IsFavorite}" Value="True">
+                                                                                                <Setter Property="Text" Value="&#xE735;"/>
+                                                                                                <Setter Property="Foreground" Value="{DynamicResource WarningBrush}"/>
+                                                                                            </DataTrigger>
+                                                                                        </Style.Triggers>
+                                                                                    </Style>
+                                                                                </TextBlock.Style>
+                                                                            </TextBlock>
+                                                                        </Button>
+                                                                        <Button Style="{StaticResource IconButton}" Padding="6"
+                                                                                Command="{Binding DataContext.ToggleModelCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                                                CommandParameter="{Binding}"
+                                                                                ToolTip="Toggle slim/classic model">
+                                                                            <TextBlock Text="&#xE77B;" FontFamily="{StaticResource IconFont}" FontSize="13"
+                                                                                       Foreground="{DynamicResource TextMuted}"/>
+                                                                        </Button>
+                                                                        <Button Style="{StaticResource IconButton}" Padding="6"
+                                                                                Command="{Binding DataContext.DeleteCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                                                CommandParameter="{Binding}" ToolTip="Delete">
+                                                                            <TextBlock Text="&#xE74D;" FontFamily="{StaticResource IconFont}" FontSize="13"
+                                                                                       Foreground="{DynamicResource DangerLightBrush}"/>
+                                                                        </Button>
+                                                                    </UniformGrid>
+                                                                </StackPanel>
+                                                            </Grid>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsSelected" Value="True">
+                                                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                                                <Setter TargetName="Bd" Property="Effect" Value="{DynamicResource AccentGlowEffect}"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.Style>
+                    </ListBox>
+                </Grid>
+
+                <!-- List view -->
+                <Grid Grid.Row="1" Margin="0,12,0,0"
+                      Visibility="{Binding IsGrid, Converter={StaticResource InverseBoolToVisibility}}">
+                    <ListBox ItemsSource="{Binding Skins}" SelectedItem="{Binding SelectedSkin, Mode=TwoWay}"
+                             Style="{StaticResource PlainListBox}"
+                             Visibility="{Binding Skins.Count, Converter={StaticResource BoolToVisibility}}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource CardPanel}" Margin="0,0,0,10" Padding="12"
+                                        Background="{DynamicResource CardBrush}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120"/>
+                                            <ColumnDefinition Width="16"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Avatar box -->
+                                        <Border Width="120" Height="120" CornerRadius="12"
+                                                Background="{DynamicResource SurfaceBrush}"
+                                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                                HorizontalAlignment="Left" VerticalAlignment="Stretch">
+                                            <ctl:SkinThumbnail SourcePath="{Binding FilePath}"/>
+                                        </Border>
+
+                                        <!-- Info & actions -->
+                                        <Grid Grid.Column="2">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="*"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+
+                                            <StackPanel Grid.Row="0" Margin="2,8,0,0" VerticalAlignment="Top">
+                                                <TextBlock Text="{Binding Name, StringFormat={}{0}}" 
+                                                           FontSize="16" FontWeight="Bold"
+                                                           Foreground="{DynamicResource TextPrimary}"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                                    <TextBlock Text="{Binding ModelLabel}" Style="{StaticResource MutedText}"/>
+                                                    <TextBlock Text="{Binding DimensionsLabel}" Style="{StaticResource MutedText}"
+                                                               Margin="8,0,0,0"/>
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding LastImportedLabel}" Style="{StaticResource CaptionText}"
+                                                           Margin="0,4,0,0"/>
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="2,10,0,2">
+                                                <Button Content="Apply skin" Style="{StaticResource PrimaryButton}"
+                                                        HorizontalAlignment="Stretch" MinWidth="120"
+                                                        Padding="18,10" FontSize="13"
+                                                        Command="{Binding DataContext.ApplyCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                        CommandParameter="{Binding}"/>
+                                                <Button Content="Delete" Style="{StaticResource DangerGhostButton}"
+                                                        Margin="10,0,0,0" Padding="16,10" FontSize="13"
+                                                        Command="{Binding DataContext.DeleteCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                        CommandParameter="{Binding}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>
