@@ -16,6 +16,7 @@ public sealed class ForgeInstallerService
     private readonly DownloadManager _downloads;
     private readonly JavaLocatorService _java;
     private readonly JavaInstallService _javaInstall;
+    private readonly VersionInstallService _versionInstall;
     private readonly LogService _log;
 
     public ForgeApi ForgeApi { get; }
@@ -27,6 +28,7 @@ public sealed class ForgeInstallerService
         DownloadManager downloads,
         JavaLocatorService java,
         JavaInstallService javaInstall,
+        VersionInstallService versionInstall,
         LogService log)
     {
         ForgeApi = forgeApi;
@@ -34,6 +36,7 @@ public sealed class ForgeInstallerService
         _downloads = downloads;
         _java = java;
         _javaInstall = javaInstall;
+        _versionInstall = versionInstall;
         _log = log;
     }
 
@@ -57,6 +60,7 @@ public sealed class ForgeInstallerService
             throw new InvalidOperationException($"Failed to download the Forge installer: {result.ErrorMessage}");
 
         await RunInstallerAsync(installerFile, gameVersion, progress, ct, "Forge", versionId);
+        await ResolveAndInstallAsync(versionId, gameVersion, progress, ct);
         return await ReadInstalledInfoAsync(versionId, gameVersion, ModLoaderType.Forge, build);
     }
 
@@ -80,6 +84,7 @@ public sealed class ForgeInstallerService
             throw new InvalidOperationException($"Failed to download the NeoForge installer: {result.ErrorMessage}");
 
         await RunInstallerAsync(installerFile, gameVersion, progress, ct, "NeoForge", versionId);
+        await ResolveAndInstallAsync(versionId, gameVersion, progress, ct);
         return await ReadInstalledInfoAsync(versionId, gameVersion, ModLoaderType.NeoForge, version);
     }
 
@@ -101,23 +106,67 @@ public sealed class ForgeInstallerService
 
         progress?.Report(new InstallProgress { Stage = $"Running {label} installer...", Fraction = 0.45 });
 
-        _log.Info($"Running {label} installer: {javaPath} -jar {installerPath} --installClient");
-        var (exitCode, _, stderr) = await ProcessHelper.RunAsync(
-            javaPath,
-            $"-jar {ArgBuilder.Quote(installerPath)} --installClient",
-            workDir,
-            onLine: line => _log.Debug($"[{label} installer] {line}"),
-            ct: ct);
+        // The Forge/NeoForge installer aborts with "There is no minecraft launcher
+        // profile in '.', you need to run the launcher first!" unless the working
+        // directory contains a launcher_profiles.json. Provide a minimal empty one
+        // so --installClient can proceed; it is removed after the run.
+        var profilePath = Path.Combine(workDir, "launcher_profiles.json");
+        File.WriteAllText(profilePath, """
+            {
+              "authenticationDatabase": {},
+              "clientToken": "0b0f0b0f-0000-4000-8000-000000000000",
+              "launcherVersion": { "name": "1.6.93", "format": 21 },
+              "profiles": {},
+              "selectedProfile": "(Default)",
+              "settings": { "showMenu": false },
+              "usedAuth": {}
+            }
+            """);
 
-        if (exitCode != 0)
+        try
         {
-            throw new InvalidOperationException(
-                $"{label} installer exited with code {exitCode}.{Environment.NewLine}{(stderr.Length > 500 ? stderr[..500] : stderr)}");
+            _log.Info($"Running {label} installer: {javaPath} -jar {installerPath} --installClient");
+            var (exitCode, _, stderr) = await ProcessHelper.RunAsync(
+                javaPath,
+                $"-jar {ArgBuilder.Quote(installerPath)} --installClient",
+                workDir,
+                onLine: line => _log.Debug($"[{label} installer] {line}"),
+                ct: ct);
+
+            if (exitCode != 0)
+            {
+                throw new InvalidOperationException(
+                    $"{label} installer exited with code {exitCode}.{Environment.NewLine}{(stderr.Length > 500 ? stderr[..500] : stderr)}");
+            }
+        }
+        finally
+        {
+            try { File.Delete(profilePath); } catch { }
         }
 
         // The installer produced .minecraft-style folder in workdir; move into shared dirs.
         progress?.Report(new InstallProgress { Stage = "Finalizing install...", Fraction = 0.85 });
         ConsolidateInstallerOutput(versionId);
+    }
+
+    /// <summary>
+    /// The installer writes a raw version JSON that inherits from the base game
+    /// version (exactly like Fabric/Quilt profiles). Feed it through the standard
+    /// install pipeline so the inheritance chain is merged into a standalone
+    /// launchable JSON (base libraries + classpath + natives arguments included)
+    /// and the base client, libraries, natives and assets are installed.
+    /// </summary>
+    private async Task ResolveAndInstallAsync(
+        string versionId, string gameVersion, IProgress<InstallProgress>? progress, CancellationToken ct)
+    {
+        var rawJson = Json.ReadFromFile<VersionJson>(Paths.VersionJson(versionId));
+        if (rawJson is null)
+            throw new InvalidOperationException($"The installer did not produce a version JSON for '{versionId}'.");
+
+        if (string.IsNullOrEmpty(rawJson.InheritsFrom)) return; // standalone version, nothing to merge
+
+        progress?.Report(new InstallProgress { Stage = "Resolving base Minecraft version...", Fraction = 0.9 });
+        await _versionInstall.InstallVersionAsync(rawJson, progress: progress, ct: ct);
     }
 
     /// <summary>

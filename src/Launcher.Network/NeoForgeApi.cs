@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using Launcher.Models;
+using Launcher.Utils;
 
 namespace Launcher.Network;
 
@@ -26,6 +27,7 @@ public sealed class NeoForgeApi
             .Where(v => v.StartsWith(gameVersion + ".", StringComparison.Ordinal)
                      || v.StartsWith(gameVersion + "-", StringComparison.Ordinal)
                      || (gameVersion.StartsWith("1.", StringComparison.Ordinal) && v.StartsWith(modern + ".", StringComparison.Ordinal)))
+            .OrderByDescending(v => v, VersionCompare.Comparer.Instance)
             .ToList();
     }
 

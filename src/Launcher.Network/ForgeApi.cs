@@ -24,7 +24,7 @@ public sealed class ForgeApi
         return versions
             .Where(v => v.StartsWith(gameVersion + "-", StringComparison.Ordinal))
             .Select(v => v[(gameVersion.Length + 1)..])
-            .OrderBy(v => v, new ForgeVersionSorter())
+            .OrderByDescending(v => v, new ForgeVersionSorter())
             .ToList();
     }
 

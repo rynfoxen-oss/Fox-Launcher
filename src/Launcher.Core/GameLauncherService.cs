@@ -26,6 +26,7 @@ public sealed class GameLauncherService
     private readonly LogService _log;
     private readonly ModManagerService _mods;
     private readonly ModrinthApi _modrinth;
+    private readonly VersionInstallService _versionInstall;
     private readonly Dictionary<string, GameProcess> _running = new();
     private readonly object _lock = new();
 
@@ -37,7 +38,8 @@ public sealed class GameLauncherService
         EventBus events,
         LogService log,
         ModManagerService mods,
-        ModrinthApi modrinth)
+        ModrinthApi modrinth,
+        VersionInstallService versionInstall)
     {
         _java = java;
         _javaInstall = javaInstall;
@@ -47,6 +49,7 @@ public sealed class GameLauncherService
         _log = log;
         _mods = mods;
         _modrinth = modrinth;
+        _versionInstall = versionInstall;
     }
 
     /// <summary>Returns all currently running game processes.</summary>
@@ -88,6 +91,18 @@ public sealed class GameLauncherService
         }
 
         var version = Json.ReadFromFile<VersionJson>(versionPath) ?? new VersionJson();
+
+        // Loader versions (Forge/NeoForge/Fabric/Quilt) inherit from a base game
+        // version. When the stored JSON is still the raw inherited profile (for
+        // example from an install done before inheritance flattening), resolve the
+        // chain now so the launch has the full classpath, natives and arguments.
+        if (!string.IsNullOrEmpty(version.InheritsFrom))
+        {
+            progress?.Report(new InstallProgress { Stage = $"Resolving base version {version.InheritsFrom}...", Fraction = 0.02 });
+            await _versionInstall.InstallVersionAsync(version, progress: progress, ct: ct);
+            version = Json.ReadFromFile<VersionJson>(versionPath) ?? version;
+        }
+
         if (string.IsNullOrEmpty(version.MainClass))
         {
             return LaunchResult.Fail($"Version '{versionId}' is missing a main class and cannot be launched.");

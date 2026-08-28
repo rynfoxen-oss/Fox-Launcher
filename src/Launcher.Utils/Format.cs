@@ -65,6 +65,13 @@ public static class VersionCompare
         }
         return 0;
     }
+
+    /// <summary>IComparer view for use with LINQ OrderBy / OrderByDescending.</summary>
+    public sealed class Comparer : IComparer<string>
+    {
+        public static readonly Comparer Instance = new();
+        public int Compare(string? a, string? b) => VersionCompare.Compare(a, b);
+    }
 }
 
 /// <summary>Identifier helpers.</summary>

@@ -22,12 +22,15 @@ public sealed class FabricMetaApi
             return list.Select(v => v.Version).Where(v => v is not null).Select(v => v!).ToList();
         }, ct);
 
-    /// <summary>Returns available loader versions for a game version.</summary>
+    /// <summary>Returns available loader versions, newest first.</summary>
     public async Task<List<string>> GetLoaderVersionsAsync(CancellationToken ct = default)
     {
         var raw = await _http.GetStringAsync($"{Base}/versions/loader", ct);
         var list = Json.DeserializeApi<List<MetaLoaderVersion>>(raw) ?? new();
-        return list.Select(v => v.Version).Where(v => v is not null).Select(v => v!).ToList();
+        return list
+            .Select(v => v.Version).Where(v => v is not null).Select(v => v!)
+            .OrderByDescending(v => v, VersionCompare.Comparer.Instance)
+            .ToList();
     }
 
     /// <summary>

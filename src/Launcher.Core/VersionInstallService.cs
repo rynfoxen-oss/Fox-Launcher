@@ -298,18 +298,21 @@ public sealed class VersionInstallService
         return result;
     }
 
-    /// <summary>Combines two argument lists, appending the child's tokens (deduplicated).</summary>
+    /// <summary>Combines two argument lists, appending the child's tokens in
+    /// order. Tokens are NOT deduplicated: option flags such as <c>--add-opens</c>
+    /// legitimately repeat (one per value), so dropping "duplicates" corrupts the
+    /// launch command.</summary>
     private static VersionArguments? MergeArguments(VersionArguments? parent, VersionArguments? child)
     {
         if (parent is null && child is null) return null;
 
         var game = new List<object>();
         if (parent?.Game is not null) game.AddRange(parent.Game);
-        if (child?.Game is not null) game.AddRange(child.Game.Where(g => !game.Any(x => x.ToString() == g.ToString())));
+        if (child?.Game is not null) game.AddRange(child.Game);
 
         var jvm = new List<object>();
         if (parent?.Jvm is not null) jvm.AddRange(parent.Jvm);
-        if (child?.Jvm is not null) jvm.AddRange(child.Jvm.Where(g => !jvm.Any(x => x.ToString() == g.ToString())));
+        if (child?.Jvm is not null) jvm.AddRange(child.Jvm);
 
         return new VersionArguments { Game = game, Jvm = jvm };
     }
