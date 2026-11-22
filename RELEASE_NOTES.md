@@ -17,10 +17,10 @@
 
 Download the file for your Mac:
 
-- **Apple Silicon:** `Fox-Launcher-1.2.2-alpha.2-mac-arm64.dmg`
-- **Intel:** `Fox-Launcher-1.2.2-alpha.2-mac-x64.dmg`
+- **Apple Silicon:** `Fox-Launcher-1.2.2-alpha.2-mac-arm64.zip`
+- **Intel:** `Fox-Launcher-1.2.2-alpha.2-mac-x64.zip`
 
-Or use `Fox-Launcher-1.2.2-alpha.2-mac-setup.zip` from the manual release assets if available.
+New: `Fox-Launcher-1.2.2-alpha.2-mac-setup.zip` is an installer that removes the quarantine attribute automatically. Extract it, then run **Install Fox Launcher.command**.
 
 If the attached Mac build is signed and notarized, it will open normally. If it is unsigned, macOS may show:
 
