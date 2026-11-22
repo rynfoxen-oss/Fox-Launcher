@@ -72,4 +72,4 @@ This fixes vanilla and modded Minecraft launching on both Intel and Apple Silico
 
 ## Windows
 
-Use `Fox Launcher Setup 1.2.2-alpha.2.exe`.
+Use `Fox.Launcher.Setup.1.2.2-alpha.2.exe` (GitHub converts spaces in asset names to dots).
