@@ -1,9 +1,11 @@
-# Fox Launcher 1.2.2 Alpha 2
+# Fox Launcher 1.2.2
+
+The stable 1.2.2 release. It promotes everything from Alpha 1 and Alpha 2, including the new inline update notices, auto-saving settings, the rebuilt Skins page, and the macOS fixes.
 
 ## What's new
 
-- **Alpha 2:** second prerelease build of 1.2.2 with all Alpha 1 improvements plus the Home download bar, image drag & drop, auto-applied skins, and the Alex/slim skin fix.
-- **Update notices now work for Alpha builds:** the launcher watches the releases list instead of only stable releases, so Alpha users are notified about newer Alpha versions with an inline banner. Dismissing a version stays dismissed until a newer one appears. Saved `releases/latest` feed URLs are upgraded automatically so old settings cannot hide prereleases.
+- **Stable 1.2.2:** all Alpha improvements are now the recommended build for Windows and macOS.
+- **Update notices that include Alpha builds:** the launcher watches the releases list instead of only stable releases, so prerelease users are notified about newer prereleases with an inline banner. Dismissing a version stays dismissed until a newer one appears. Saved `releases/latest` feed URLs are upgraded automatically so old settings cannot hide prereleases.
 - **Settings auto-save:** every change now saves itself after a short pause. There is no Save button, no unsaved bar, and no lost edits when changing pages or closing the launcher. Saving status is shown inline with retry on failure.
 - **Better Skins page:** inline status messages, skin search, newest-first sorting, model badges, one-click "use preview on profile", safer inline delete confirmation, and correct classic/slim model when applying a card. Deleting a skin also cleans up its offline mappings.
 - **Offline skins are more reliable:** explicit player mappings now take priority over same-named library skins, manual mappings keep their chosen skin when refreshed, and other players' skins still work when the active profile has no skin.
@@ -17,16 +19,16 @@
 
 Download the file for your Mac:
 
-- **Apple Silicon:** `Fox-Launcher-1.2.2-alpha.2-mac-arm64.zip`
-- **Intel:** `Fox-Launcher-1.2.2-alpha.2-mac-x64.zip`
+- **Apple Silicon:** `Fox-Launcher-1.2.2-mac-arm64.zip`
+- **Intel:** `Fox-Launcher-1.2.2-mac-x64.zip`
 
-New: `Fox-Launcher-1.2.2-alpha.2-mac-setup.zip` is an installer that removes the quarantine attribute automatically. Extract it, then run **Install Fox Launcher.command**.
+`Fox-Launcher-1.2.2-mac-setup.zip` is an installer that removes the quarantine attribute automatically. Extract it, then run **Install Fox Launcher.command**.
 
 If the attached Mac build is signed and notarized, it will open normally. If it is unsigned, macOS may show:
 
 > Apple could not verify "Fox Launcher" is free of malware...
 
-For an unsigned build, after opening the DMG, drag **Fox Launcher.app** to Applications, then use one of these fixes:
+For an unsigned build, after opening the ZIP, drag **Fox Launcher.app** to Applications, then use one of these fixes:
 
 1. Right-click `Fox Launcher.app` → **Open** → **Open** again.
 2. Or go to **System Settings → Privacy & Security → Fox Launcher was blocked → Open Anyway**.
@@ -72,4 +74,4 @@ This fixes vanilla and modded Minecraft launching on both Intel and Apple Silico
 
 ## Windows
 
-Use `Fox.Launcher.Setup.1.2.2-alpha.2.exe` (GitHub converts spaces in asset names to dots).
+Use `Fox.Launcher.Setup.1.2.2.exe` (GitHub converts spaces in asset names to dots). The Windows installer is identified as **Fox Launcher** in Task Manager, and its uninstaller only removes game data if you choose that option.

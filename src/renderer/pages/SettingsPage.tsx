@@ -717,7 +717,7 @@ export function SettingsPage() {
               <h2>Fox Launcher v{displayVersion(version)}</h2>
               <p className="muted">{t('aboutText')}</p>
               <div className="alpha-card">
-                <div className="alpha-card-head"><span className="alpha-badge">ALPHA</span><strong>1.2.2 Alpha 2 build highlights</strong></div>
+                <div className="alpha-card-head"><span className="alpha-badge">LATEST</span><strong>1.2.2 build highlights</strong></div>
                 <ul>
                   <li>{THEME_ORDER.length} full color themes recolor the entire window — sidebar, cards, buttons, inputs and dialogs.</li>
                   <li>{EFFECT_COUNT} signature scene effects, live mini-launcher previews and {BACKGROUNDS.length} animated wallpapers.</li>

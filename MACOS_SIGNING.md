@@ -54,8 +54,8 @@ Add these secrets:
 Push a new tag, for example:
 
 ```bash
-git tag v1.2.2-alpha.2
-git push origin v1.2.2-alpha.2
+git tag v1.2.2
+git push origin v1.2.2
 ```
 
 Or manually run:
