@@ -83,6 +83,7 @@ Java 8+ is needed to play. The launcher detects common Java installations and ca
 - Every setting saves itself after a short pause. Inline states show **Saving…**, **Auto-saved**, or an error with retry — there is no Save button and no unsaved bar.
 - Launcher updates use GitHub's releases list, so prerelease users are notified about newer prereleases. The inline banner shows the version, release-note summary, asset name, and size, with **Release notes** and **Download** buttons.
 - Dismissing an update hides that version until a newer one appears.
+- Anonymous, local-only diagnostic counters stay on your device and can be cleared from Settings → About.
 - The branded Windows uninstaller only deletes game data if you explicitly choose that option on its page.
 
 ## Development
