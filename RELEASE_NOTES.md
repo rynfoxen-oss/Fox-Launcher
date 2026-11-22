@@ -3,7 +3,7 @@
 ## What's new
 
 - **Alpha 2:** second prerelease build of 1.2.2 with all Alpha 1 improvements plus the Home download bar, image drag & drop, auto-applied skins, and the Alex/slim skin fix.
-- **Update notices now work for Alpha builds:** the launcher watches the releases list instead of only stable releases, so Alpha users are notified about newer Alpha versions with an inline banner. Dismissing a version stays dismissed until a newer one appears.
+- **Update notices now work for Alpha builds:** the launcher watches the releases list instead of only stable releases, so Alpha users are notified about newer Alpha versions with an inline banner. Dismissing a version stays dismissed until a newer one appears. Saved `releases/latest` feed URLs are upgraded automatically so old settings cannot hide prereleases.
 - **Settings auto-save:** every change now saves itself after a short pause. There is no Save button, no unsaved bar, and no lost edits when changing pages or closing the launcher. Saving status is shown inline with retry on failure.
 - **Better Skins page:** inline status messages, skin search, newest-first sorting, model badges, one-click "use preview on profile", safer inline delete confirmation, and correct classic/slim model when applying a card. Deleting a skin also cleans up its offline mappings.
 - **Offline skins are more reliable:** explicit player mappings now take priority over same-named library skins, manual mappings keep their chosen skin when refreshed, and other players' skins still work when the active profile has no skin.

@@ -99,14 +99,13 @@ export function selectRelease(releases: ReleasePayload[], current: string): Rele
     .sort((a, b) => compareVersions(extractVersion(b), extractVersion(a)))[0];
 }
 
-function normalizeFeed(feed: string): string {
-  const trimmed = feed.trim().replace(/\.git$/, '').replace(/\/$/, '') || DEFAULT_UPDATE_FEED;
-  if (/^https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+\/releases\/latest$/i.test(trimmed)) {
-    return trimmed;
-  }
+export function normalizeFeed(feed: string): string {
+  const trimmed = feed.trim().replace(/\.git$/, '').replace(/\/+$/, '').replace(/\?.*$/, '') || DEFAULT_UPDATE_FEED;
+  // Even when someone saved the API "latest" URL directly, it must be upgraded:
+  // /releases/latest hides prereleases, so Alpha builds would never see a newer Alpha.
+  const apiLatest = /^https:\/\/api\.github\.com\/repos\/([^/]+)\/([^/]+)\/releases\/latest$/i.exec(trimmed);
+  if (apiLatest) return `https://api.github.com/repos/${apiLatest[1]}/${apiLatest[2]}/releases?per_page=20`;
   const github = /^https:\/\/github\.com\/([^/]+)\/([^/]+)(?:\/releases(?:\/latest)?)?$/i.exec(trimmed);
-  // /releases/latest never returns prereleases, so Alpha users would never see
-  // newer Alpha builds. Use the releases list and choose the newest we can use.
   if (github) return `https://api.github.com/repos/${github[1]}/${github[2]}/releases?per_page=20`;
   if (!/^https:\/\//i.test(trimmed)) throw new Error('Update feed must be an HTTPS URL');
   return trimmed;

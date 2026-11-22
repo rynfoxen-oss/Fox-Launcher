@@ -102,6 +102,12 @@ class Store {
       // Required dependencies are always installed with a mod. Old profiles
       // that saved this as false are upgraded automatically.
       settings.autoDownloadDependencies = true;
+      // A saved API /releases/latest URL hides prereleases, so old Alpha setups
+      // would silently stop receiving Alpha notices. Upgrade it on startup.
+      const apiLatest = /^https:\/\/api\.github\.com\/repos\/([^/]+)\/([^/]+)\/releases\/latest\/?$/i.exec(
+        settings.updateFeedUrl?.trim() ?? '',
+      );
+      if (apiLatest) settings.updateFeedUrl = `https://github.com/${apiLatest[1]}/${apiLatest[2]}`;
       this.data = {
         settings,
         instances: Array.isArray(parsed.instances) ? parsed.instances : [],
