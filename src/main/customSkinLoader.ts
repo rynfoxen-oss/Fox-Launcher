@@ -1,0 +1,240 @@
+import { promises as fs } from 'fs';
+import * as path from 'path';
+import { app } from 'electron';
+import { PNG } from 'pngjs';
+import { store } from './store';
+import { ensureDir, sha256 } from './utils';
+import type { Instance, SkinModel } from '../shared/types';
+
+/**
+ * CustomSkinLoader (often installed together with SkinRestorer) resolves skins
+ * by Minecraft name and will happily fall back to Mojang's public profile. On
+ * offline-mode servers that public profile is usually the default Steve/Alex,
+ * which overrides the skin selected in Fox Launcher.
+ *
+ * Before launching, mirror every known name -> skin assignment into CSL's
+ * LocalSkin directory and put that loader first. This keeps the launcher skin
+ * authoritative even when third-party skin mods are installed.
+ */
+
+const NAME_RE = /^[A-Za-z0-9_]{1,16}$/;
+const MANIFEST_FILE = 'fox-launcher-manifest.json';
+
+interface SkinFile {
+  name: string;
+  fileName: string;
+  hash: string;
+  model: SkinModel;
+  buffer: Buffer;
+}
+
+interface Manifest {
+  version: 1;
+  files: Record<string, string>;
+}
+
+type Config = Record<string, unknown> & {
+  version?: string;
+  buildNumber?: number;
+  loadlist?: Array<Record<string, unknown>>;
+};
+
+function safeFileName(name: string): string {
+  return name.replace(/[^A-Za-z0-9_]/g, '_').slice(0, 16) || 'player';
+}
+
+function normalizeSkin(buffer: Buffer): Buffer | null {
+  try {
+    const png = PNG.sync.read(buffer);
+    const valid = (png.width === 64 && (png.height === 32 || png.height === 64))
+      || (png.width === 128 && (png.height === 64 || png.height === 128));
+    return valid ? PNG.sync.write(png) : null;
+  } catch {
+    return null;
+  }
+}
+
+function decodeDataUrl(value?: string): Buffer | null {
+  if (!value?.startsWith('data:image/png;base64,')) return null;
+  return Buffer.from(value.slice('data:image/png;base64,'.length), 'base64');
+}
+
+async function textureForHash(hash: string): Promise<Buffer | null> {
+  const saved = store.get().skins.find((skin) => skin.hash === hash);
+  const file = path.join(app.getPath('userData'), 'skins', `${hash}.png`);
+  const fromFile = await fs.readFile(file).catch(() => null);
+  return normalizeSkin(fromFile ?? decodeDataUrl(saved?.dataUrl) ?? Buffer.alloc(0));
+}
+
+function isLocalSkinEntry(entry: unknown): boolean {
+  if (!entry || typeof entry !== 'object') return false;
+  const item = entry as Record<string, unknown>;
+  if (item.name === 'LocalSkin') return true;
+  return typeof item.skin === 'string' && item.skin.includes('LocalSkin/skins');
+}
+
+function defaultLocalSkinEntry(): Record<string, unknown> {
+  return {
+    name: 'LocalSkin',
+    type: 'Legacy',
+    checkPNG: false,
+    skin: 'LocalSkin/skins/{USERNAME}.png',
+    model: 'auto',
+    cape: 'LocalSkin/capes/{USERNAME}.png',
+    elytra: 'LocalSkin/elytras/{USERNAME}.png',
+  };
+}
+
+async function ensureLocalSkinFirst(cslDir: string): Promise<void> {
+  const configPath = path.join(cslDir, 'CustomSkinLoader.json');
+  const raw = await fs.readFile(configPath, 'utf8').catch(() => null);
+  let config: Config = {};
+
+  if (raw) {
+    try {
+      config = JSON.parse(raw) as Config;
+    } catch {
+      // Let CustomSkinLoader regenerate a broken config on its next start.
+      return;
+    }
+  }
+
+  const list = Array.isArray(config.loadlist) ? config.loadlist : [];
+  const local = list.find(isLocalSkinEntry) ?? defaultLocalSkinEntry();
+  const others = list.filter((entry) => entry !== local && !isLocalSkinEntry(entry));
+  const next: Config = { ...config, loadlist: [local, ...others] };
+  const nextRaw = `${JSON.stringify(next, null, 2)}\n`;
+  if (raw !== nextRaw) await fs.writeFile(configPath, nextRaw, 'utf8');
+}
+
+async function removeTree(target: string): Promise<void> {
+  await fs.rm(target, { recursive: true, force: true }).catch(() => undefined);
+}
+
+async function hasCustomSkinLoader(instance: Instance): Promise<boolean> {
+  const dataDir = path.join(instance.gameDir, 'CustomSkinLoader');
+  if (await fs.readdir(dataDir).then(() => true, () => false)) return true;
+  const modsDir = path.join(instance.gameDir, 'mods');
+  const mods = await fs.readdir(modsDir).catch(() => [] as string[]);
+  return mods.some((name) => name.toLowerCase().includes('customskinloader'));
+}
+
+async function collectSkinFiles(): Promise<SkinFile[]> {
+  const data = store.get();
+  const byName = new Map<string, SkinFile>();
+  const usedFileNames = new Set<string>();
+
+  const add = async (rawName: string, hash: string, model?: SkinModel) => {
+    if (!NAME_RE.test(rawName)) return;
+    const buffer = await textureForHash(hash);
+    if (!buffer) return;
+    const base = {
+      hash: sha256(buffer),
+      model: model ?? 'steve',
+      buffer,
+    };
+    // Offline servers sometimes lowercase names before sending player models.
+    // Provide the common capitalization variants so LocalSkin still matches.
+    const capitalized = rawName.charAt(0).toUpperCase() + rawName.slice(1).toLowerCase();
+    const names = [rawName, rawName.toLowerCase(), capitalized];
+    for (const name of names) {
+      if (!NAME_RE.test(name) || byName.has(name)) continue;
+      const fileName = `${safeFileName(name)}.png`;
+      // Windows paths are case-insensitive; do not create/write duplicate
+      // manifest entries for `Yukkie.png` and `yukkie.png`.
+      const fileKey = process.platform === 'win32' ? fileName.toLowerCase() : fileName;
+      if (usedFileNames.has(fileKey)) continue;
+      usedFileNames.add(fileKey);
+      byName.set(name, { ...base, name, fileName });
+    }
+  };
+
+  // The active/offline accounts come first: their selected skin is the one the
+  // player expects to see on every server.
+  for (const account of data.accounts) {
+    if (account.skinHash) await add(account.name, account.skinHash, account.skinModel);
+  }
+
+  // Explicit offline-server mappings are next, including players fetched from
+  // Mojang's public API in Skins -> Offline server skins.
+  for (const entry of data.offlineSkins ?? []) {
+    await add(entry.name, entry.hash, entry.model);
+  }
+
+  // Finally, library skins whose name is a valid Minecraft name can be used as
+  // convenient LocalSkin files without an explicit mapping.
+  for (const skin of data.skins) {
+    await add(skin.name, skin.hash, skin.model);
+  }
+
+  return [...byName.values()];
+}
+
+/**
+ * Writes the launcher's selected skins into CustomSkinLoader's local skin
+ * folder for one instance. Returns the number of player names synced.
+ */
+export async function syncCustomSkinLoader(instance: Instance): Promise<number> {
+  if (!(await hasCustomSkinLoader(instance))) return 0;
+
+  const files = await collectSkinFiles();
+  const cslDir = path.join(instance.gameDir, 'CustomSkinLoader');
+  const skinsDir = path.join(cslDir, 'LocalSkin', 'skins');
+  const manifestPath = path.join(skinsDir, MANIFEST_FILE);
+
+  const previousRaw = await fs.readFile(manifestPath, 'utf8').catch(() => null);
+  let previous: Manifest | null = null;
+  if (previousRaw) {
+    try {
+      const parsed = JSON.parse(previousRaw) as Manifest;
+      if (parsed?.version === 1 && parsed.files && typeof parsed.files === 'object') previous = parsed;
+    } catch {
+      previous = null;
+    }
+  }
+
+  const nextFiles: Record<string, string> = {};
+  for (const item of files) nextFiles[item.fileName] = item.hash;
+  const changed = !previous || JSON.stringify(previous.files) !== JSON.stringify(nextFiles);
+
+  await ensureDir(skinsDir);
+  for (const item of files) {
+    await fs.writeFile(path.join(skinsDir, item.fileName), item.buffer);
+  }
+
+  if (previous) {
+    const nextKeys = new Set(
+      Object.keys(nextFiles).map((name) => process.platform === 'win32' ? name.toLowerCase() : name),
+    );
+    for (const fileName of Object.keys(previous.files)) {
+      const key = process.platform === 'win32' ? fileName.toLowerCase() : fileName;
+      if (!nextKeys.has(key)) {
+        await fs.unlink(path.join(skinsDir, fileName)).catch(() => undefined);
+      }
+    }
+  }
+
+  if (changed) {
+    // CSL caches profile lookups by name. Without clearing these, a previously
+    // fetched Mojang/default profile can survive even after the local file is
+    // written.
+    await removeTree(path.join(cslDir, 'ProfileCache'));
+    await removeTree(path.join(cslDir, 'caches'));
+    await fs.writeFile(manifestPath, `${JSON.stringify({ version: 1, files: nextFiles } as Manifest, null, 2)}\n`, 'utf8');
+  }
+
+  await ensureLocalSkinFirst(cslDir);
+  return files.length;
+}
+
+/** Syncs all instances that have CustomSkinLoader installed. */
+export async function syncAllCustomSkinLoaders(): Promise<void> {
+  const instances = store.get().instances;
+  for (const instance of instances) {
+    try {
+      await syncCustomSkinLoader(instance);
+    } catch (error) {
+      console.warn(`[Skins] Could not sync CustomSkinLoader for ${instance.name}:`, error);
+    }
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "name": "fox-launcher",
+  "version": "1.2.2-alpha.2",
+  "description": "Fox Launcher",
+  "main": "dist-electron/main/index.js",
+  "author": "Fox Launcher",
+  "license": "MIT",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rynfoxen-oss/Fox-Launcher.git"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n VITE,ELECTRON -c cyan,magenta \"vite\" \"wait-on http://127.0.0.1:5173 && cross-env FOX_DEV=1 electron .\"",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:renderer": "tsc -p tsconfig.json && vite build",
+    "build": "npm run build:main && npm run build:renderer",
+    "package": "npm run build && electron-builder",
+    "package:dir": "npm run build && electron-builder --dir",
+    "package:mac": "npm run build && node scripts/package-mac.mjs",
+    "package:mac:x64": "npm run build && node scripts/package-mac.mjs --x64",
+    "package:mac:arm64": "npm run build && node scripts/package-mac.mjs --arm64",
+    "package:mac:dmg": "npm run build && electron-builder --mac --x64 --arm64 --publish never",
+    "package:mac:dmg:unsigned": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --x64 --arm64 --publish never",
+    "package:mac:setup": "node scripts/package-mac-setup.mjs",
+    "release:mac": "npm run package:mac && npm run package:mac:setup",
+    "icon": "node scripts/generate-icon.js",
+    "installer:art": "node scripts/generate-installer-art.js",
+    "release": "npm run build && electron-builder --publish always",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^4.5.0",
+    "lucide-react": "^0.468.0",
+    "pngjs": "^7.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "skinview3d": "^2.2.1",
+    "three": "^0.171.0",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@electron/get": "^5.1.0",
+    "@types/node": "^22.10.0",
+    "@types/pngjs": "^6.0.5",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/three": "^0.171.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
+    "electron": "^31.7.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11",
+    "wait-on": "^8.0.1",
+    "yauzl": "^3.4.0",
+    "yazl": "^3.3.1"
+  },
+  "build": {
+    "appId": "com.foxlauncher.app",
+    "productName": "Fox Launcher",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "rynfoxen-oss",
+        "repo": "Fox-Launcher",
+        "releaseType": "release"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build/icon.icns",
+      "category": "public.app-category.games",
+      "artifactName": "Fox-Launcher-${version}-mac-${arch}.${ext}"
+    },
+    "nsis": {
+      "script": "installer.nsi",
+      "installerHeader": "installer-header.bmp",
+      "installerSidebar": "installer-welcome.bmp",
+      "uninstallerSidebar": "installer-welcome.bmp",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "build/icon.ico",
+      "build/icon.png",
+      "build/icon.icns",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/authlib-injector.jar",
+        "to": "authlib-injector.jar"
+      }
+    ]
+  }
+}
