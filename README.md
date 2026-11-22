@@ -2,20 +2,20 @@
 
 A modern Minecraft launcher for Windows and macOS, built with Electron, React, and TypeScript.
 
-**Current release: 1.2.2 Alpha 2** (prerelease) — [download it here](https://github.com/rynfoxen-oss/Fox-Launcher/releases/tag/v1.2.2-alpha.2).
+**Current release: 1.2.2** (stable) — [download it here](https://github.com/rynfoxen-oss/Fox-Launcher/releases/tag/v1.2.2).
 
-> **Which branch is this?** The default `main` branch still contains the original C# launcher. This Electron launcher lives on the [`electron-launcher`](https://github.com/rynfoxen-oss/Fox-Launcher/tree/electron-launcher) branch, which is where the `v1.2.2-alpha.2` release tag points.
+> **Which branch is this?** The default `main` branch still contains the original C# launcher. This Electron launcher lives on the [`electron-launcher`](https://github.com/rynfoxen-oss/Fox-Launcher/tree/electron-launcher) branch, which is where the `v1.2.2` release tag points.
 
 ## Download
 
 | Platform | File |
 | --- | --- |
-| Windows 10/11 | `Fox.Launcher.Setup.1.2.2-alpha.2.exe` |
-| macOS — Apple Silicon | `Fox-Launcher-1.2.2-alpha.2-mac-arm64.zip` |
-| macOS — Intel | `Fox-Launcher-1.2.2-alpha.2-mac-x64.zip` |
-| macOS — guided installer | `Fox-Launcher-1.2.2-alpha.2-mac-setup.zip` |
+| Windows 10/11 | `Fox.Launcher.Setup.1.2.2.exe` |
+| macOS — Apple Silicon | `Fox-Launcher-1.2.2-mac-arm64.zip` |
+| macOS — Intel | `Fox-Launcher-1.2.2-mac-x64.zip` |
+| macOS — guided installer | `Fox-Launcher-1.2.2-mac-setup.zip` |
 
-All files are attached to the [1.2.2 Alpha 2 release](https://github.com/rynfoxen-oss/Fox-Launcher/releases/tag/v1.2.2-alpha.2).
+All files are attached to the [1.2.2 release](https://github.com/rynfoxen-oss/Fox-Launcher/releases/tag/v1.2.2).
 
 On macOS, extract the ZIP and drag **Fox Launcher.app** to Applications. If macOS blocks an unsigned build, right-click the app and choose **Open**, or run:
 
