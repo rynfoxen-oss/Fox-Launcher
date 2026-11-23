@@ -97,7 +97,7 @@ function changedPatch<T extends object>(original: T, draft: T): Partial<T> {
 }
 
 export function SettingsPage() {
-  const { settings, updateSettings, resetSettings, checkForUpdate, updateAvailable } = useApp();
+  const { settings, updateSettings, resetSettings, checkForUpdate, updateAvailable, updateInstall, installUpdate } = useApp();
   const t = useT();
   const [draft, setDraft] = useState<Settings>(settings);
   // Kept in sync synchronously so rapid clicks in one tick never overwrite each other.
@@ -325,12 +325,21 @@ export function SettingsPage() {
     try {
       const result = await checkForUpdate();
       if (!result.configured) setStatusDescription('Set a launcher update feed in Accounts first.');
-      else if (result.available) setStatusDescription(`Fox Launcher ${result.version} is available. Open the update link below to download it.`);
+      else if (result.available) setStatusDescription(`Fox Launcher ${result.version} is available. Use Update now to install it without opening GitHub.`);
       else setStatusDescription(`Fox Launcher ${result.current} is up to date.`);
     } catch (error) {
       setStatusDescription(`Update check failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setCheckingUpdate(false);
+    }
+  }
+
+  async function startInstall() {
+    try {
+      const result = await installUpdate();
+      setStatusDescription(result.message ?? 'Updating Fox Launcher…');
+    } catch (error) {
+      setStatusDescription(`Update failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -717,24 +726,40 @@ export function SettingsPage() {
               <h2>Fox Launcher v{displayVersion(version)}</h2>
               <p className="muted">{t('aboutText')}</p>
               <div className="alpha-card">
-                <div className="alpha-card-head"><span className="alpha-badge">LATEST</span><strong>1.2.2 build highlights</strong></div>
+                <div className="alpha-card-head"><span className="alpha-badge">LATEST</span><strong>1.2.3 build highlights</strong></div>
                 <ul>
                   <li>{THEME_ORDER.length} full color themes recolor the entire window — sidebar, cards, buttons, inputs and dialogs.</li>
                   <li>{EFFECT_COUNT} signature scene effects, live mini-launcher previews and {BACKGROUNDS.length} animated wallpapers.</li>
                   <li>Settings describe every change inline — no pop-ups.</li>
+                  <li>Updates install silently in-app, with verified downloads and an automatic restart.</li>
                   <li>Instant tweaks are real on/off switches; Unlimited FPS uses <code>maxFps:260</code>.</li>
                   <li>Per-instance performance profiles survive Minecraft option-key changes.</li>
                 </ul>
               </div>
-              {updateAvailable?.available && (
-                <div className="update-card">
-                  <div><strong>{t('updateAvailableTitle')}: v{displayVersion(updateAvailable.version)}</strong><span>{updateAvailable.assetName ?? t('downloadUpdate')} · v{displayVersion(updateAvailable.current)} → v{displayVersion(updateAvailable.version)}</span></div>
-                  <div className="about-actions">
-                    {updateAvailable.url && <Button variant="secondary" size="sm" icon={<ExternalLink size={14} />} onClick={() => void window.fox.app.openExternal(updateAvailable.url ?? '')}>{t('releaseNotes')}</Button>}
-                    {(updateAvailable.downloadUrl ?? updateAvailable.url) && <Button size="sm" icon={<Download size={14} />} onClick={() => void window.fox.app.openExternal(updateAvailable.downloadUrl ?? updateAvailable.url ?? '')}>{t('downloadUpdate')}</Button>}
+              {updateAvailable?.available && (() => {
+                const stage = updateInstall?.stage ?? 'idle';
+                const active = stage === 'downloading' || stage === 'verifying' || stage === 'extracting'
+                  || stage === 'installing' || stage === 'ready';
+                return (
+                  <div className="update-card">
+                    <div>
+                      <strong>{t('updateAvailableTitle')}: v{displayVersion(updateAvailable.version)}</strong>
+                      <span>{updateAvailable.assetName ?? t('downloadUpdate')} · v{displayVersion(updateAvailable.current)} → v{displayVersion(updateAvailable.version)}</span>
+                      {updateInstall && stage !== 'idle' && (
+                        <span>{updateInstall.message ?? stage}{updateInstall.percent !== undefined ? ` · ${updateInstall.percent}%` : ''}{updateInstall.error ? ` · ${updateInstall.error}` : ''}</span>
+                      )}
+                    </div>
+                    <div className="about-actions">
+                      {updateAvailable.url && <Button variant="secondary" size="sm" icon={<ExternalLink size={14} />} onClick={() => void window.fox.app.openExternal(updateAvailable.url ?? '')}>{t('releaseNotes')}</Button>}
+                      {updateAvailable.downloadUrl && (
+                        <Button size="sm" icon={<Download size={14} />} loading={active} disabled={active} onClick={() => void startInstall()}>
+                          {stage === 'error' ? t('updateRetry') : t('installUpdate')}
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
               <div className="about-actions">
                 <Button variant="secondary" icon={<FolderOpen size={16} />} onClick={() => void window.fox.app.openFolder(dataPath)}>{t('openDataFolder')}</Button>
                 <Button variant="secondary" icon={<RefreshCw size={16} />} loading={checkingUpdate} onClick={() => void checkNow()}>{t('checkForUpdates')}</Button>

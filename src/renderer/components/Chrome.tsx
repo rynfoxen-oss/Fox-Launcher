@@ -6,9 +6,11 @@ import {
   ExternalLink,
   Gauge,
   Home,
+  Loader2,
   LogIn,
   Minus,
   Palette,
+  RefreshCw,
   Search,
   Shirt,
   Sparkles,
@@ -125,6 +127,10 @@ export function UpdateBanner() {
   const update = useApp((state) => state.updateAvailable);
   const dismissed = useApp((state) => state.updateDismissed);
   const dismiss = useApp((state) => state.dismissUpdate);
+  const install = useApp((state) => state.updateInstall);
+  const installUpdate = useApp((state) => state.installUpdate);
+  const dismissUpdateError = useApp((state) => state.dismissUpdateError);
+  const [startError, setStartError] = useState<string | null>(null);
   const t = useT();
   const summary = useMemo(() => {
     if (!update?.notes) return '';
@@ -138,8 +144,28 @@ export function UpdateBanner() {
   }, [update?.notes]);
   if (!update?.available || dismissed) return null;
 
+  const stage = install?.stage ?? 'idle';
+  const active = stage === 'downloading' || stage === 'verifying' || stage === 'extracting'
+    || stage === 'installing' || stage === 'ready';
+  const stageLabel = stage === 'downloading' ? t('updateDownloading')
+    : stage === 'verifying' ? t('updateVerifying')
+      : stage === 'extracting' ? t('updateExtracting')
+        : stage === 'installing' ? t('updateInstalling')
+          : stage === 'ready' ? t('updateRestarting')
+            : stage === 'error' ? t('updateFailed') : '';
+  const detail = startError ?? install?.error;
   const downloadUrl = update.downloadUrl ?? update.url;
   const size = formatUpdateSize(update.assetSize);
+
+  async function handleInstall() {
+    setStartError(null);
+    try {
+      await installUpdate();
+    } catch (error) {
+      setStartError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   return (
     <div className="update-banner" role="status">
       <span className="update-banner-icon"><Sparkles size={17} /></span>
@@ -149,18 +175,38 @@ export function UpdateBanner() {
           {summary || `${t('updateAvailableDescription')} v${displayVersion(update.current)}.`}
           {update.assetName && <em> · {update.assetName}{size ? ` · ${size}` : ''}</em>}
         </span>
+        {(active || detail) && (
+          <div className="update-banner-progress">
+            {active && (
+              <div className="update-banner-progress-track">
+                <span style={{ width: `${Math.max(0, Math.min(100, install?.percent ?? 0))}%` }} />
+              </div>
+            )}
+            <small title={detail ?? undefined}>
+              {stageLabel}
+              {active && install?.percent !== undefined ? ` · ${install.percent}%` : ''}
+              {detail ? ` · ${detail}` : ''}
+            </small>
+          </div>
+        )}
       </div>
       {update.url && (
         <button className="btn btn-ghost btn-sm" onClick={() => void window.fox.app.openExternal(update.url ?? '')}>
           <ExternalLink size={14} /> {t('releaseNotes')}
         </button>
       )}
-      {downloadUrl && (
-        <button className="btn btn-primary btn-sm" onClick={() => void window.fox.app.openExternal(downloadUrl)}>
-          <Download size={14} /> {t('downloadUpdate')} {update.assetName ? `(${update.assetName})` : ''}
+      {downloadUrl && stage === 'error' && (
+        <button className="btn btn-primary btn-sm" onClick={() => { dismissUpdateError(); void handleInstall(); }}>
+          <RefreshCw size={14} /> {t('updateRetry')}
         </button>
       )}
-      <button className="icon-btn" onClick={dismiss} title={t('later')}><X size={15} /></button>
+      {downloadUrl && stage !== 'error' && (
+        <button className="btn btn-primary btn-sm" disabled={active} onClick={() => void handleInstall()}>
+          {active ? <Loader2 size={14} className="spin" /> : <Download size={14} />}
+          {active ? stageLabel : t('installUpdate')}
+        </button>
+      )}
+      <button className="icon-btn" onClick={dismiss} disabled={active} title={t('later')}><X size={15} /></button>
     </div>
   );
 }

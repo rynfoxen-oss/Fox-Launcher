@@ -185,8 +185,31 @@ export interface UpdateCheckResult {
   downloadUrl?: string;
   assetName?: string;
   assetSize?: number;
+  assetSha256?: string;
   notes?: string;
   publishedAt?: string;
+}
+
+export type SelfUpdateStage =
+  | 'idle'
+  | 'downloading'
+  | 'verifying'
+  | 'extracting'
+  | 'installing'
+  | 'ready'
+  | 'error';
+
+export interface SelfUpdateStatus {
+  stage: SelfUpdateStage;
+  version?: string;
+  assetName?: string;
+  bytes: number;
+  total: number;
+  percent?: number;
+  speedBps?: number;
+  etaSeconds?: number;
+  message?: string;
+  error?: string;
 }
 
 export interface DiagnosticStats {
@@ -314,6 +337,8 @@ export interface IpcApi {
     selectImage(): Promise<string | null>;
     checkUpdates(): Promise<UpdateCheckResult>;
     getUpdateStatus(): Promise<UpdateCheckResult | null>;
+    installUpdate(): Promise<SelfUpdateStatus>;
+    getInstallUpdateStatus(): Promise<SelfUpdateStatus>;
     getDownloads(): Promise<DownloadSnapshot>;
     clearDownloadHistory(): Promise<void>;
     getDiagnostics(): Promise<DiagnosticStats>;
@@ -401,5 +426,6 @@ export interface IpcApi {
     onLaunchLog(callback: (line: LaunchLogLine) => void): () => void;
     onLaunchState(callback: (state: LaunchState) => void): () => void;
     onUpdateAvailable(callback: (update: UpdateCheckResult) => void): () => void;
+    onUpdateProgress(callback: (status: SelfUpdateStatus) => void): () => void;
   };
 }

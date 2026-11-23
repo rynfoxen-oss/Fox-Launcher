@@ -1,6 +1,6 @@
 {
   "name": "fox-launcher",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Fox Launcher",
   "main": "dist-electron/main/index.js",
   "author": "Fox Launcher",

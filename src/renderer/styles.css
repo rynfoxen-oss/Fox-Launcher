@@ -122,6 +122,11 @@ a { color: var(--accent); }
 .update-new-badge { padding: 2px 6px; border-radius: 5px; background: var(--accent); color: #fff; font-size: 9px; font-weight: 900; letter-spacing: .06em; }
 .update-banner-copy span { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .update-banner-copy em { font-style: normal; color: var(--accent); }
+.update-banner-progress { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.update-banner-progress-track { flex: 1; min-width: 90px; max-width: 320px; height: 3px; border-radius: 999px; background: rgba(255,255,255,.14); overflow: hidden; }
+.update-banner-progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .2s ease; }
+.update-banner-progress small { font-size: 9px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.update-banner .spin { animation: spin .9s linear infinite; }
 .app-shell > .update-banner .btn { flex-shrink: 0; }
 @media (max-width: 900px) { .update-banner .btn-ghost { display: none; } }
 .avatar-mini { width: 19px; height: 19px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(140deg, var(--accent), var(--accent-2)); color: #fff; font-size: 10px; font-weight: 800; flex-shrink: 0; }

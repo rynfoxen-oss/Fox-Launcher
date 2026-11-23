@@ -327,7 +327,7 @@ export const THEMES: Record<string, ThemePreset> = {
     orb3: 'rgba(253,224,71,0.10)',
   },
 
-  /* 1.2.2 — next generation motion collection */
+  /* 1.2.3 — next generation motion collection */
   auroraPulse: {
     id: 'auroraPulse',
     label: 'Aurora Pulse',

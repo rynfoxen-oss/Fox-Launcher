@@ -11,6 +11,8 @@ interface ReleaseAsset {
   browser_download_url?: string;
   size?: number;
   content_type?: string;
+  /** GitHub asset digest, e.g. "sha256:abcd...". */
+  digest?: string;
 }
 
 interface ReleasePayload {
@@ -111,6 +113,11 @@ export function normalizeFeed(feed: string): string {
   return trimmed;
 }
 
+function assetSha256(asset: ReleaseAsset | undefined): string | undefined {
+  const match = /^sha256:([a-f0-9]{64})$/i.exec(asset?.digest?.trim() ?? '');
+  return match?.[1];
+}
+
 function pickInstaller(release: ReleasePayload): ReleaseAsset | undefined {
   const assets = Array.isArray(release.assets) ? release.assets : [];
   if (process.platform === 'darwin') {
@@ -156,6 +163,7 @@ export async function checkForUpdates(_notify = false): Promise<UpdateCheckResul
     downloadUrl: installer?.browser_download_url,
     assetName: installer?.name,
     assetSize: installer?.size,
+    assetSha256: assetSha256(installer),
     notes: release.body?.trim(),
     publishedAt: release.published_at,
   };

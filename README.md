@@ -2,20 +2,20 @@
 
 A modern Minecraft launcher for Windows and macOS, built with Electron, React, and TypeScript.
 
-**Current release: 1.2.2** (stable) — [download it here](https://github.com/rynfoxen-oss/Fox-Launcher/releases/tag/v1.2.2).
+**Current release: 1.2.3** (stable) — [download it here](https://github.com/rynfoxen-oss/Fox-Launcher/releases/tag/v1.2.3).
 
-> **Which branch is this?** The default `main` branch still contains the original C# launcher. This Electron launcher lives on the [`electron-launcher`](https://github.com/rynfoxen-oss/Fox-Launcher/tree/electron-launcher) branch, which is where the `v1.2.2` release tag points.
+> **Which branch is this?** The default `main` branch still contains the original C# launcher. This Electron launcher lives on the [`electron-launcher`](https://github.com/rynfoxen-oss/Fox-Launcher/tree/electron-launcher) branch, which is where the `v1.2.3` release tag points.
 
 ## Download
 
 | Platform | File |
 | --- | --- |
-| Windows 10/11 | `Fox.Launcher.Setup.1.2.2.exe` |
-| macOS — Apple Silicon | `Fox-Launcher-1.2.2-mac-arm64.zip` |
-| macOS — Intel | `Fox-Launcher-1.2.2-mac-x64.zip` |
-| macOS — guided installer | `Fox-Launcher-1.2.2-mac-setup.zip` |
+| Windows 10/11 | `Fox.Launcher.Setup.1.2.3.exe` |
+| macOS — Apple Silicon | `Fox-Launcher-1.2.3-mac-arm64.zip` |
+| macOS — Intel | `Fox-Launcher-1.2.3-mac-x64.zip` |
+| macOS — guided installer | `Fox-Launcher-1.2.3-mac-setup.zip` |
 
-All files are attached to the [1.2.2 release](https://github.com/rynfoxen-oss/Fox-Launcher/releases/tag/v1.2.2).
+All files are attached to the [1.2.3 release](https://github.com/rynfoxen-oss/Fox-Launcher/releases/tag/v1.2.3).
 
 On macOS, extract the ZIP and drag **Fox Launcher.app** to Applications. If macOS blocks an unsigned build, right-click the app and choose **Open**, or run:
 
@@ -46,6 +46,13 @@ Java 8+ is needed to play. The launcher detects common Java installations and ca
 - Color-coded launch console.
 - Active downloads show as a compact progress bar at the top of Home, with per-file detail, speed, and ETA.
 - Closes immediately when you quit — no confirmation dialog.
+
+### Updates
+
+- Inline update banner shows the new version, release-note summary, asset, and size.
+- **Update now** downloads and installs the correct build in the background, verifies its SHA-256 digest, and restarts Fox Launcher — no trip to GitHub.
+- Progress and any error stay inline in the banner and Settings; no pop-ups.
+- Alpha builds are notified about newer Alpha releases; stable builds only receive stable releases. Dismissing a version keeps it dismissed until a newer one appears.
 
 ### Instances
 

@@ -87,6 +87,7 @@ export class SpeedTracker {
 
 export interface DownloadOptions {
   sha1?: string;
+  sha256?: string;
   timeoutMs?: number;
   retries?: number;
   headers?: Record<string, string>;
@@ -154,10 +155,12 @@ function requestOnce(
         let downloaded = 0;
         const temp = `${dest}.part`;
         const out = fs.createWriteStream(temp);
-        const hash = options.sha1 ? crypto.createHash('sha1') : null;
+        const sha1Hash = options.sha1 ? crypto.createHash('sha1') : null;
+        const sha256Hash = options.sha256 ? crypto.createHash('sha256') : null;
         res.on('data', (chunk: Buffer) => {
           downloaded += chunk.length;
-          hash?.update(chunk);
+          sha1Hash?.update(chunk);
+          sha256Hash?.update(chunk);
           options.onProgress?.(downloaded, total);
         });
         res.on('error', reject);
@@ -165,7 +168,9 @@ function requestOnce(
         res.pipe(out);
         out.on('finish', () => {
           out.close(() => {
-            if (options.sha1 && hash && hash.digest('hex') !== options.sha1.toLowerCase()) {
+            const sha1Mismatch = options.sha1 && sha1Hash && sha1Hash.digest('hex') !== options.sha1.toLowerCase();
+            const sha256Mismatch = options.sha256 && sha256Hash && sha256Hash.digest('hex') !== options.sha256.toLowerCase();
+            if (sha1Mismatch || sha256Mismatch) {
               void fs.promises.unlink(temp).catch(() => undefined);
               reject(new Error(`Checksum mismatch for ${path.basename(dest)}`));
               return;
@@ -228,6 +233,8 @@ interface ZipEntry {
   compressedSize: number;
   uncompressedSize: number;
   localOffset: number;
+  /** ZIP external attributes; the high 16 bits hold the Unix mode. */
+  externalAttributes: number;
 }
 
 function readZipEntries(buffer: Buffer): ZipEntry[] {
@@ -250,9 +257,10 @@ function readZipEntries(buffer: Buffer): ZipEntry[] {
     const nameLength = buffer.readUInt16LE(offset + 28);
     const extraLength = buffer.readUInt16LE(offset + 30);
     const commentLength = buffer.readUInt16LE(offset + 32);
+    const externalAttributes = buffer.readUInt32LE(offset + 38);
     const localOffset = buffer.readUInt32LE(offset + 42);
     const name = buffer.toString('utf8', offset + 46, offset + 46 + nameLength);
-    entries.push({ name, method, compressedSize, uncompressedSize, localOffset });
+    entries.push({ name, method, compressedSize, uncompressedSize, localOffset, externalAttributes });
     offset += 46 + nameLength + extraLength + commentLength;
   }
   return entries;
@@ -320,6 +328,62 @@ export async function extractZipArchive(file: string, outputDir: string): Promis
     extracted.push(target);
   }
   return extracted;
+}
+
+export interface MacAppExtraction {
+  appBundle: string;
+  /** Relative file paths and their Unix modes, used to restore executable bits after copy. */
+  modes: Map<string, number>;
+}
+
+async function findAppBundle(directory: string, depth = 0): Promise<string | null> {
+  const entries = await fs.promises.readdir(directory, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isDirectory() && entry.name.endsWith('.app')) return path.join(directory, entry.name);
+  }
+  if (depth >= 2) return null;
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const found = await findAppBundle(path.join(directory, entry.name), depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * Extracts an Electron macOS ZIP while preserving symlinks and Unix modes.
+ * Electron apps contain Frameworks symlinks and executable helpers; a plain
+ * writeFile extraction produces a bundle that macOS refuses to launch.
+ */
+export async function extractMacAppArchive(file: string, outputDir: string): Promise<MacAppExtraction> {
+  const buffer = await fs.promises.readFile(file);
+  const root = path.resolve(outputDir);
+  const modes = new Map<string, number>();
+  await ensureDir(root);
+  for (const entry of readZipEntries(buffer)) {
+    if (entry.name.endsWith('/')) continue;
+    const target = path.resolve(root, entry.name);
+    if (target !== root && !target.startsWith(`${root}${path.sep}`)) continue;
+    const content = readZipData(buffer, entry);
+    if (!content) continue;
+    await fs.promises.mkdir(path.dirname(target), { recursive: true });
+    const unixMode = (entry.externalAttributes >>> 16) & 0xffff;
+    const fileType = unixMode & 0o170000;
+    if (fileType === 0o120000) {
+      const linkTarget = content.toString('utf8');
+      // Absolute symlinks could point outside the extracted bundle.
+      if (path.isAbsolute(linkTarget)) continue;
+      await fs.promises.symlink(linkTarget, target);
+      continue;
+    }
+    await fs.promises.writeFile(target, content);
+    const mode = (unixMode & 0o777) || (fileType === 0o100000 ? 0o644 : 0o755);
+    await fs.promises.chmod(target, mode).catch(() => undefined);
+    modes.set(path.relative(root, target), mode);
+  }
+  const appBundle = await findAppBundle(root);
+  if (!appBundle) throw new Error('The macOS update archive does not contain a Fox Launcher.app bundle');
+  return { appBundle, modes };
 }
 
 export { readZipEntries };

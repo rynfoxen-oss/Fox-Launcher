@@ -26,6 +26,8 @@ const api: IpcApi = {
     selectImage: () => invoke<string | null>('app:selectImage'),
     checkUpdates: () => invoke('app:checkUpdates'),
     getUpdateStatus: () => invoke('app:updateStatus'),
+    installUpdate: () => invoke('app:installUpdate'),
+    getInstallUpdateStatus: () => invoke('app:installStatus'),
     getDownloads: () => invoke('app:downloads'),
     clearDownloadHistory: () => invoke('app:clearDownloads'),
     getDiagnostics: () => invoke('app:diagnostics'),
@@ -110,6 +112,7 @@ const api: IpcApi = {
     onLaunchLog: (callback) => listen('app:log', callback),
     onLaunchState: (callback) => listen('app:launchState', callback),
     onUpdateAvailable: (callback) => listen('app:update', callback),
+    onUpdateProgress: (callback) => listen('app:updateProgress', callback),
   },
 };
 

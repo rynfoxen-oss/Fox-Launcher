@@ -42,6 +42,7 @@ import {
 import { getNews } from './news';
 import { addOfflinePlayer, listOfflinePlayers, removeOfflinePlayer } from './offlineSkinDirectory';
 import { applyPerformanceSettings, getPerformanceSettings, installFpsMods } from './performance';
+import { getUpdateInstallStatus, startUpdate } from './selfUpdate';
 import { store } from './store';
 import { applySkin, importSkin, importSkinFromData, removeSkin, uploadSkinForAccount } from './skins';
 import { record as recordTelemetry, clearDiagnostics, getDiagnostics } from './telemetry';
@@ -87,6 +88,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   });
   ipcMain.handle('app:checkUpdates', () => checkForUpdates(true));
   ipcMain.handle('app:updateStatus', () => getLastUpdateCheck());
+  ipcMain.handle('app:installUpdate', () => startUpdate());
+  ipcMain.handle('app:installStatus', () => getUpdateInstallStatus());
   ipcMain.handle('app:downloads', () => events.getDownloadSnapshot());
   ipcMain.handle('app:clearDownloads', () => {
     events.clearDownloadHistory();

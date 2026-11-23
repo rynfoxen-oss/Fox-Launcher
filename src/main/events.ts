@@ -6,6 +6,7 @@ import type {
   DownloadSnapshot,
   LaunchLogLine,
   LaunchState,
+  SelfUpdateStatus,
   UpdateCheckResult,
 } from '../shared/types';
 
@@ -73,6 +74,10 @@ class AppEvents extends EventEmitter {
   update(result: UpdateCheckResult): void {
     this.emit('update', result);
     this.emitToRenderer('app:update', result);
+  }
+
+  updateProgress(status: SelfUpdateStatus): void {
+    this.emitToRenderer('app:updateProgress', status);
   }
 
   toast(_type: 'success' | 'error' | 'info', _message: string, _category = 'general'): void {

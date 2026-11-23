@@ -7,6 +7,7 @@ import type {
   LaunchState,
   NewsItem,
   OfflineSkinEntry,
+  SelfUpdateStatus,
   Settings,
   SkinEntry,
   UpdateCheckResult,
@@ -39,6 +40,7 @@ interface AppState {
   paletteOpen: boolean;
   updateAvailable: UpdateCheckResult | null;
   updateDismissed: boolean;
+  updateInstall: SelfUpdateStatus | null;
   init: () => Promise<void>;
   navigate: (page: Page, instanceId?: string, options?: { focus?: string }) => void;
   toast: (type: 'success' | 'error' | 'info', message: string, category?: ToastCategory) => void;
@@ -49,6 +51,8 @@ interface AppState {
   clearDownloadHistory: () => Promise<void>;
   checkForUpdate: () => Promise<UpdateCheckResult>;
   dismissUpdate: () => void;
+  installUpdate: () => Promise<SelfUpdateStatus>;
+  dismissUpdateError: () => void;
   refreshInstances: () => Promise<void>;
   refreshAccounts: () => Promise<void>;
   refreshSkins: () => Promise<void>;
@@ -98,6 +102,7 @@ export const useApp = create<AppState>((set, get) => ({
   paletteOpen: false,
   updateAvailable: null,
   updateDismissed: false,
+  updateInstall: null,
 
   async init() {
     // Subscribe once before the first IPC reads so startup events are never missed.
@@ -122,11 +127,12 @@ export const useApp = create<AppState>((set, get) => ({
           };
         }));
       fox().events.onUpdateAvailable((update) => set({ updateAvailable: update, updateDismissed: isUpdateDismissed(update) }));
+      fox().events.onUpdateProgress((status) => set({ updateInstall: status }));
       set({ listenersAttached: true });
     }
 
     try {
-      const [settings, instances, accounts, currentAccount, skins, offlineSkins, launchState, logs, downloads, update] = await Promise.all([
+      const [settings, instances, accounts, currentAccount, skins, offlineSkins, launchState, logs, downloads, update, installStatus] = await Promise.all([
         fox().settings.get(),
         fox().instances.list(),
         fox().accounts.list(),
@@ -137,6 +143,7 @@ export const useApp = create<AppState>((set, get) => ({
         fox().launcher.logs(),
         fox().app.getDownloads(),
         fox().app.getUpdateStatus(),
+        fox().app.getInstallUpdateStatus(),
       ]);
       set({
         settings,
@@ -151,6 +158,7 @@ export const useApp = create<AppState>((set, get) => ({
         downloadHistory: downloads.history,
         updateAvailable: update,
         updateDismissed: isUpdateDismissed(update),
+        updateInstall: installStatus?.stage === 'idle' ? null : installStatus,
         selectedInstanceId: settings.lastInstanceId ?? instances[0]?.id ?? null,
         ready: true,
       });
@@ -215,6 +223,16 @@ export const useApp = create<AppState>((set, get) => ({
       }
     }
     set({ updateDismissed: true });
+  },
+
+  async installUpdate() {
+    const status = await fox().app.installUpdate();
+    set({ updateInstall: status });
+    return status;
+  },
+
+  dismissUpdateError() {
+    set({ updateInstall: null });
   },
 
   async refreshInstances() {
