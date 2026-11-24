@@ -20,6 +20,7 @@ import type { InstalledMod, ModSearchResult, ModVersion, VersionSummary } from '
 import { useApp } from '../store';
 import { useT } from '../i18n';
 import { Button, EmptyState, Modal, Spinner } from '../components/Common';
+import { useWindowedList } from '../useWindowedList';
 
 const CATEGORIES = [
   { value: 'mod', key: 'mods', icon: <Package size={14} /> },
@@ -55,7 +56,10 @@ function contentTypeClass(type?: InstalledMod['type']): string {
 }
 
 export function ModsPage() {
-  const { instances, selectedInstanceId, toast, navigate } = useApp();
+  const instances = useApp((state) => state.instances);
+  const selectedInstanceId = useApp((state) => state.selectedInstanceId);
+  const toast = useApp((state) => state.toast);
+  const navigate = useApp((state) => state.navigate);
   const t = useT();
   const instance = instances.find((item) => item.id === selectedInstanceId) ?? instances[0];
   const [category, setCategory] = useState<string>('mod');
@@ -155,6 +159,17 @@ export function ModsPage() {
     if (!term) return installed;
     return installed.filter((mod) => `${mod.name} ${mod.fileName}`.toLowerCase().includes(term));
   }, [installed, installedQuery]);
+
+  const resultsWindow = useWindowedList(visibleResults, {
+    estimateHeight: 232,
+    gap: 11,
+    resetKey: `${instance?.id ?? ''}|${category}|${mcVersion}|${query}|${installedOnly}|${sort}`,
+  });
+  const installedWindow = useWindowedList(visibleInstalled, {
+    estimateHeight: 62,
+    gap: 8,
+    resetKey: `${instance?.id ?? ''}|${installedQuery}`,
+  });
 
   const updateCount = installed.filter((mod) => mod.updateAvailable).length;
 
@@ -440,58 +455,66 @@ export function ModsPage() {
               action={category === 'modpack' ? <Button variant="secondary" onClick={() => navigate('instances', instance.id, { focus: 'import' })}>Import modpack</Button> : undefined}
             />
           ) : (
-            <div className="mod-card-grid">
-              {visibleResults.map((mod) => {
-                const installedHere = isInstalled(mod);
-                return (
-                  <article className={`mod-card ${installedHere ? 'installed' : ''}`} key={`${mod.source}-${mod.projectId}`}>
-                    <div className="mod-card-top">
-                      {mod.iconUrl
-                        ? <img className="mod-icon" src={mod.iconUrl} alt="" loading="lazy" />
-                        : <div className="mod-icon placeholder"><Package size={20} /></div>}
-                      <div className="mod-card-badges">
-                        {installedHere && <span className="installed-chip"><Check size={11} /> Installed</span>}
-                        <span className="mod-source-chip">Modrinth</span>
+            <div className="mod-card-grid" ref={resultsWindow.scrollRef} onScroll={resultsWindow.onScroll}>
+              <div className="virtual-spacer" style={{ height: resultsWindow.paddingTop }} aria-hidden="true" />
+              <div className="mod-card-virtual-grid">
+                {resultsWindow.visible.map((mod, index) => {
+                  const installedHere = isInstalled(mod);
+                  return (
+                    <article
+                      ref={(element) => { if (index === 0) resultsWindow.firstItemRef.current = element; }}
+                      className={`mod-card ${installedHere ? 'installed' : ''}`}
+                      key={`${mod.source}-${mod.projectId}`}
+                    >
+                      <div className="mod-card-top">
+                        {mod.iconUrl
+                          ? <img className="mod-icon" src={mod.iconUrl} alt="" loading="lazy" />
+                          : <div className="mod-icon placeholder"><Package size={20} /></div>}
+                        <div className="mod-card-badges">
+                          {installedHere && <span className="installed-chip"><Check size={11} /> Installed</span>}
+                          <span className="mod-source-chip">Modrinth</span>
+                        </div>
                       </div>
-                    </div>
-                    <strong className="mod-card-title">{mod.title}</strong>
-                    <p className="mod-card-description">{mod.description}</p>
-                    <div className="mod-tags">
-                      {mod.categories.slice(0, 3).map((tag) => <span key={tag}>{tag}</span>)}
-                    </div>
-                    <div className="mod-card-meta">
-                      <span><Download size={12} /> {formatCount(mod.downloads)} downloads</span>
-                      {mod.latestVersion && <span>Build {mod.latestVersion}</span>}
-                    </div>
-                    <div className="mod-card-actions">
-                      <Button
-                        size="sm"
-                        variant={installedHere ? 'secondary' : 'primary'}
-                        icon={installedHere ? <ArrowDownToLine size={14} /> : <Download size={14} />}
-                        loading={installing === mod.projectId}
-                        onClick={() => void installMod(mod)}
-                      >
-                        {installedHere ? 'Reinstall' : t('install')}
-                      </Button>
-                      <Button size="sm" variant="secondary" icon={<History size={14} />} onClick={() => void openVersions(mod)}>
-                        Versions
-                      </Button>
-                      <button
-                        className="icon-btn"
-                        title="Open project page"
-                        onClick={() => {
-                          const modrinthPath: Record<string, string> = {
-                            mod: 'mod', resourcepack: 'resource-pack', shader: 'shader', modpack: 'modpack',
-                          };
-                          void window.fox.app.openExternal(`https://modrinth.com/${modrinthPath[mod.projectType] ?? 'mod'}/${mod.slug}`);
-                        }}
-                      >
-                        <ExternalLink size={14} />
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
+                      <strong className="mod-card-title">{mod.title}</strong>
+                      <p className="mod-card-description">{mod.description}</p>
+                      <div className="mod-tags">
+                        {mod.categories.slice(0, 3).map((tag) => <span key={tag}>{tag}</span>)}
+                      </div>
+                      <div className="mod-card-meta">
+                        <span><Download size={12} /> {formatCount(mod.downloads)} downloads</span>
+                        {mod.latestVersion && <span>Build {mod.latestVersion}</span>}
+                      </div>
+                      <div className="mod-card-actions">
+                        <Button
+                          size="sm"
+                          variant={installedHere ? 'secondary' : 'primary'}
+                          icon={installedHere ? <ArrowDownToLine size={14} /> : <Download size={14} />}
+                          loading={installing === mod.projectId}
+                          onClick={() => void installMod(mod)}
+                        >
+                          {installedHere ? 'Reinstall' : t('install')}
+                        </Button>
+                        <Button size="sm" variant="secondary" icon={<History size={14} />} onClick={() => void openVersions(mod)}>
+                          Versions
+                        </Button>
+                        <button
+                          className="icon-btn"
+                          title="Open project page"
+                          onClick={() => {
+                            const modrinthPath: Record<string, string> = {
+                              mod: 'mod', resourcepack: 'resource-pack', shader: 'shader', modpack: 'modpack',
+                            };
+                            void window.fox.app.openExternal(`https://modrinth.com/${modrinthPath[mod.projectType] ?? 'mod'}/${mod.slug}`);
+                          }}
+                        >
+                          <ExternalLink size={14} />
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+              <div className="virtual-spacer" style={{ height: resultsWindow.paddingBottom }} aria-hidden="true" />
             </div>
           )}
         </section>
@@ -512,9 +535,14 @@ export function ModsPage() {
           {visibleInstalled.length === 0 ? (
             <EmptyState icon={<Package size={26} />} title={installedQuery ? 'No matches' : t('noModsInstalled')} description={installedQuery ? 'Try a different file name.' : t('noModsDescription')} />
           ) : (
-            <div className="installed-list">
-              {visibleInstalled.map((mod) => (
-                <div className={`installed-row ${mod.enabled ? '' : 'disabled'}`} key={`${mod.type ?? 'mod'}-${mod.fileName}`}>
+            <div className="installed-list" ref={installedWindow.scrollRef} onScroll={installedWindow.onScroll}>
+              <div className="virtual-spacer" style={{ height: installedWindow.paddingTop }} aria-hidden="true" />
+              {installedWindow.visible.map((mod, index) => (
+                <div
+                  ref={(element) => { if (index === 0) installedWindow.firstItemRef.current = element; }}
+                  className={`installed-row ${mod.enabled ? '' : 'disabled'}`}
+                  key={`${mod.type ?? 'mod'}-${mod.fileName}`}
+                >
                   <span className={`content-type ${contentTypeClass(mod.type)}`}>{contentTypeLabel(mod.type)}</span>
                   <div className="installed-copy">
                     <strong>{mod.name}</strong>
@@ -542,6 +570,7 @@ export function ModsPage() {
                   </button>
                 </div>
               ))}
+              <div className="virtual-spacer" style={{ height: installedWindow.paddingBottom }} aria-hidden="true" />
             </div>
           )}
           <div className="installed-footer">

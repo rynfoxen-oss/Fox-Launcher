@@ -26,6 +26,7 @@ const SKIN_FIX_PROJECTS = [
   { id: 'idMHQ4n2', title: 'CustomSkinLoader Universal' },
   { id: 'zV5r3pPn', title: '3D Skin Layers' },
 ] as const;
+const SKIN_MOD_PROJECT = SKIN_FIX_PROJECTS[0];
 
 interface ModrinthHit {
   project_id: string;
@@ -865,6 +866,27 @@ export async function installSkinFixMods(instanceId: string): Promise<SkinFixRes
     }
   }
   return result;
+}
+
+/**
+ * Keeps a skin/cape loader available to cracked players on modded instances.
+ * Vanilla has no mod directory to load from; those sessions already receive the
+ * cape through authlib-injector. Existing copies are never replaced so a manual
+ * CustomSkinLoader version choice survives launches.
+ */
+export async function ensureOfflineSkinMod(instanceId: string): Promise<string> {
+  const instance = store.get().instances.find((item) => item.id === instanceId);
+  if (!instance) throw new Error('Instance not found');
+  if (instance.loader === 'vanilla') return 'vanilla uses the built-in skin agent';
+
+  const installed = await listInstalledMods(instanceId);
+  const hasSkinMod = installed.some((item) => item.type === 'mod' && item.enabled && (
+    item.projectId === SKIN_MOD_PROJECT.id || /customskinloader/i.test(item.fileName)
+  ));
+  if (hasSkinMod) return 'CustomSkinLoader already installed';
+
+  await installMod(instanceId, SKIN_MOD_PROJECT.id, 'modrinth', SKIN_MOD_PROJECT.title, 'mod');
+  return 'CustomSkinLoader installed';
 }
 
 /** Installs the exact release file selected by the user. */

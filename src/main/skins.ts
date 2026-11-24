@@ -1,14 +1,13 @@
 import { app, dialog } from 'electron';
 import { promises as fs } from 'fs';
 import * as path from 'path';
-import { PNG } from 'pngjs';
 import {
   fetchMinecraftProfile,
   getLaunchAccount,
-  inferSkinModel,
   mergeMinecraftProfile,
   type MinecraftProfile,
 } from './auth';
+import { normalizePngLocal, normalizeTexture } from './skinImage';
 import { ensureDir, sha256 } from './utils';
 import { store } from './store';
 import { syncAllCustomSkinLoaders } from './customSkinLoader';
@@ -30,18 +29,23 @@ async function syncSkinMods(): Promise<void> {
   }
 }
 
-/** Re-encodes the PNG to strip metadata and rejects unsupported skin sizes. */
-export function sanitizeSkin(buffer: Buffer): Buffer {
-  let png: PNG;
-  try {
-    png = PNG.sync.read(buffer);
-  } catch {
-    throw new Error('Please choose a valid PNG skin file');
+/** Keeps library and offline-server records aligned when a model is overridden. */
+export function assignSkinModel(data: ReturnType<typeof store.get>, hash: string, model: SkinModel): void {
+  const skin = data.skins.find((item) => item.hash === hash);
+  if (skin) {
+    skin.model = model;
+    skin.modelOverridden = true;
   }
-  const valid = (png.width === 64 && (png.height === 32 || png.height === 64))
-    || (png.width === 128 && (png.height === 64 || png.height === 128));
-  if (!valid) throw new Error('Skin PNG must be 64x32, 64x64, 128x64 or 128x128');
-  return PNG.sync.write(png);
+  for (const entry of data.offlineSkins ?? []) {
+    if (entry.hash === hash) entry.model = model;
+  }
+}
+
+/** Re-encodes a PNG to strip metadata and rejects unsupported skin sizes. */
+export function sanitizeSkin(buffer: Buffer): Buffer {
+  const sanitized = normalizePngLocal(buffer, 'skin');
+  if (!sanitized) throw new Error('Skin PNG must be 64x32, 64x64, 128x64 or 128x128');
+  return sanitized;
 }
 
 function cleanSkinName(value: string): string {
@@ -51,12 +55,14 @@ function cleanSkinName(value: string): string {
 }
 
 async function addSkinBuffer(buffer: Buffer, name: string): Promise<SkinEntry> {
-  const sanitized = sanitizeSkin(buffer);
+  const normalized = await normalizeTexture(buffer, 'skin');
+  const sanitized = normalized.buffer;
   const hash = sha256(sanitized.toString('base64'));
   const entry: SkinEntry = {
     hash,
     name: cleanSkinName(name),
-    model: inferSkinModel(sanitized),
+    model: normalized.model,
+    modelOverridden: false,
     dataUrl: `data:image/png;base64,${sanitized.toString('base64')}`,
     createdAt: Date.now(),
   };
@@ -68,9 +74,9 @@ async function addSkinBuffer(buffer: Buffer, name: string): Promise<SkinEntry> {
   if (!existing) {
     data.skins.unshift(entry);
   } else if (entry.name !== existing.name) {
-    // Re-importing the same texture under a better name renames the library entry.
+    // Re-importing the same texture under a better name renames the library
+    // entry, but keeps any Classic/Slim override the player chose earlier.
     existing.name = entry.name;
-    existing.model = entry.model;
     changed = true;
   }
   if (changed) await store.save();
@@ -152,6 +158,7 @@ export async function applySkin(
 
   if (account.type === 'microsoft') {
     const updated = await uploadToMojang(account, texture, selectedModel);
+    assignSkinModel(data, skin.hash, selectedModel);
     Object.assign(account, updated, {
       id: account.id,
       skinHash: skin.hash,
@@ -169,6 +176,7 @@ export async function applySkin(
     };
   }
 
+  assignSkinModel(data, skin.hash, selectedModel);
   account.skinTexture = skin.dataUrl;
   account.skinModel = selectedModel;
   account.skinHash = skin.hash;
@@ -195,6 +203,17 @@ export async function uploadSkinForAccount(
   if (result.canceled || result.filePaths.length === 0) throw new Error('No skin selected');
   const entry = await addSkinFromFile(result.filePaths[0]);
   return applySkin(accountId, entry.hash, requestedModel ?? entry.model);
+}
+
+/** Stores an explicit Classic/Slim choice for one library skin. */
+export async function setSkinModel(hash: string, model: SkinModel): Promise<SkinEntry> {
+  const data = store.get();
+  const skin = data.skins.find((item) => item.hash === hash);
+  if (!skin) throw new Error('Skin not found');
+  assignSkinModel(data, hash, model);
+  await store.save();
+  await syncSkinMods();
+  return skin;
 }
 
 export async function removeSkin(hash: string): Promise<SkinEntry[]> {

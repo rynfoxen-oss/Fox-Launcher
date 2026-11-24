@@ -5,7 +5,9 @@ import { app } from 'electron';
 import { getLaunchAccount } from './auth';
 import { events } from './events';
 import { detectJava, validateJava } from './java';
+import { ensureOfflineSkinMod } from './mods';
 import { prepareOfflineSkinSession, stopOfflineSkinSession, type SkinInjection } from './offlineSkins';
+import { applyPerformanceSettings, getPerformanceSettings } from './performance';
 import { syncCustomSkinLoader } from './customSkinLoader';
 import { store } from './store';
 import {
@@ -28,10 +30,12 @@ import type {
   Instance,
   JavaInstallation,
   LaunchLogLine,
+  LaunchSnapshot,
   LaunchState,
   LoaderAvailability,
   LoaderAvailabilityMap,
   ModLoader,
+  PartyJoin,
   VersionSummary,
 } from '../shared/types';
 
@@ -574,7 +578,35 @@ async function ensureLibraries(
     if (task.native) await extractNatives(task.dest, nativesPath);
     else classpath.push(task.dest);
   }
+  await prepareModernNativeLayout(nativesPath);
   return { classpath, nativesPath };
+}
+
+/**
+ * Minecraft 26.x profiles point `java.library.path` at `<natives>/java` and
+ * also use dedicated jna/lwjgl/netty scratch folders. Older profiles load the
+ * flattened root directory. Keep both layouts so one launcher can run them all.
+ */
+async function prepareModernNativeLayout(nativesPath: string): Promise<void> {
+  const subdirectories = ['java', 'jna', 'lwjgl', 'netty'];
+  for (const name of subdirectories) await ensureDir(path.join(nativesPath, name));
+
+  const entries = await fs.readdir(nativesPath, { withFileTypes: true }).catch(() => []);
+  const nativeFiles = entries
+    .filter((entry) => entry.isFile() && /\.(dll|so|dylib)$/i.test(entry.name))
+    .map((entry) => path.join(nativesPath, entry.name));
+  const javaDir = path.join(nativesPath, 'java');
+
+  for (const source of nativeFiles) {
+    const destination = path.join(javaDir, path.basename(source));
+    const [from, to] = await Promise.all([
+      fs.stat(source).catch(() => null),
+      fs.stat(destination).catch(() => null),
+    ]);
+    if (!from) continue;
+    if (to && to.size === from.size && to.mtimeMs >= from.mtimeMs) continue;
+    await fs.copyFile(source, destination);
+  }
 }
 
 export async function prepareVersion(instance: Instance, versionIdOverride?: string): Promise<{ resolved: VersionJson; classpath: string[]; nativesPath: string; assetsPath: string }> {
@@ -623,6 +655,53 @@ function substitute(template: string, values: Record<string, string>): string {
   return template.replace(/\$\{([^}]+)\}/g, (match, key: string) => values[key.trim()] ?? match);
 }
 
+/** Quick Play replaced --server/--port in 23w14a (released with Minecraft 1.20). */
+export function usesQuickPlay(version: string): boolean {
+  const snapshot = /^(\d{2})w(\d{2})[a-z]$/i.exec(version);
+  if (snapshot) {
+    const year = Number(snapshot[1]);
+    const week = Number(snapshot[2]);
+    return year > 23 || (year === 23 && week >= 14);
+  }
+  const match = /^(\d+)\.(\d+)/.exec(version);
+  const major = match ? Number(match[1]) : 1;
+  const minor = match ? Number(match[2]) : 19;
+  return major > 1 || (major === 1 && minor >= 20);
+}
+
+function partyAddress(join: PartyJoin): string {
+  return join.port ? `${join.host}:${join.port}` : join.host;
+}
+
+/** Modern version JSONs already include an empty Quick Play flag; fill it in place. */
+function applyPartyJoin(args: string[], version: string, join: PartyJoin): void {
+  if (usesQuickPlay(version)) {
+    const address = partyAddress(join);
+    const index = args.indexOf('--quickPlayMultiplayer');
+    if (index >= 0 && args[index + 1] && !args[index + 1].startsWith('--')) args[index + 1] = address;
+    else if (index >= 0) args.splice(index + 1, 0, address);
+    else args.push('--quickPlayMultiplayer', address);
+    return;
+  }
+
+  const serverIndex = args.indexOf('--server');
+  if (serverIndex >= 0) {
+    if (args[serverIndex + 1] && !args[serverIndex + 1].startsWith('--')) args[serverIndex + 1] = join.host;
+    else args.splice(serverIndex + 1, 0, join.host);
+  } else {
+    args.push('--server', join.host);
+  }
+  if (join.port) {
+    const portIndex = args.indexOf('--port');
+    if (portIndex >= 0) {
+      if (args[portIndex + 1] && !args[portIndex + 1].startsWith('--')) args[portIndex + 1] = String(join.port);
+      else args.splice(portIndex + 1, 0, String(join.port));
+    } else {
+      args.push('--port', String(join.port));
+    }
+  }
+}
+
 function buildCommand(
   instance: Instance,
   account: Account,
@@ -632,6 +711,7 @@ function buildCommand(
   assetsPath: string,
   java: JavaSelection,
   skinInjection: SkinInjection | null,
+  join?: PartyJoin,
 ): string[] {
   const settings = store.get().settings;
   const resolution = instance.resolution ?? settings.gameResolution;
@@ -656,7 +736,7 @@ function buildCommand(
     resolution_height: String(resolution.height),
     quickPlayPath: '',
     quickPlaySingleplayer: '',
-    quickPlayMultiplayer: '',
+    quickPlayMultiplayer: join && usesQuickPlay(instance.minecraftVersion) ? partyAddress(join) : '',
     quickPlayRealms: '',
   };
 
@@ -718,6 +798,7 @@ function buildCommand(
   if (!args.includes('--width')) args.push('--width', String(resolution.width));
   if (!args.includes('--height')) args.push('--height', String(resolution.height));
   if (instance.fullscreen ?? settings.fullscreen) args.push('--fullscreen');
+  if (join) applyPartyJoin(args, instance.minecraftVersion, join);
   return [java.path, ...args];
 }
 
@@ -753,7 +834,7 @@ interface JavaSelection {
   bits?: 32 | 64;
 }
 
-async function chooseJavaPath(instance: Instance): Promise<JavaSelection> {
+export async function chooseJavaPath(instance: Instance): Promise<JavaSelection> {
   const requirement = await javaRequirement(instance.minecraftVersion);
   const autoInstall = store.get().settings.autoInstallJava;
   const configured = instance.javaPath?.trim() || store.get().settings.javaPath?.trim();
@@ -843,7 +924,30 @@ async function chooseJavaPath(instance: Instance): Promise<JavaSelection> {
   return { path: selected.path, bits: selected.bits };
 }
 
-export async function launchInstance(instanceId: string): Promise<void> {
+/** Records the settings from a clean exit so a later crash can be rolled back. */
+async function rememberWorkingSetup(instanceId: string, minecraftVersion: string): Promise<void> {
+  try {
+    const performance = await getPerformanceSettings(instanceId);
+    await store.saveLaunchSnapshot({
+      instanceId,
+      savedAt: Date.now(),
+      minecraftVersion,
+      performance,
+    });
+  } catch (error) {
+    console.warn('[Launch] Could not save a recovery snapshot:', error);
+  }
+}
+
+/** Restores the performance profile from the last clean launch of an instance. */
+export async function restoreLaunchSnapshot(instanceId: string): Promise<LaunchSnapshot> {
+  const snapshot = store.getLaunchSnapshot(instanceId);
+  if (!snapshot) throw new Error('No saved working setup for this instance yet');
+  await applyPerformanceSettings(instanceId, snapshot.performance);
+  return snapshot;
+}
+
+export async function launchInstance(instanceId: string, options?: { join?: PartyJoin }): Promise<void> {
   if (running) throw new Error('A game is already running');
   const instance = store.get().instances.find((item) => item.id === instanceId);
   if (!instance) throw new Error('Instance not found');
@@ -854,6 +958,9 @@ export async function launchInstance(instanceId: string): Promise<void> {
   lastLaunchLogs = [];
   setState({ status: 'preparing', instanceId });
   log(`Preparing ${instance.name} (${instance.minecraftVersion})...`);
+  if (options?.join) {
+    log(`Party server: ${options.join.host}${options.join.port ? `:${options.join.port}` : ''}`);
+  }
 
   try {
     const java = await chooseJavaPath(instance);
@@ -863,6 +970,14 @@ export async function launchInstance(instanceId: string): Promise<void> {
     }
     const launchVersionId = await installLoader(instance, (label) => log(label), java.path);
     const prepared = await prepareVersion(instance, launchVersionId);
+
+    if (launchAccount.type === 'offline') {
+      try {
+        log(`Offline skin support: ${await ensureOfflineSkinMod(instanceId)}`);
+      } catch (error) {
+        log(`Offline skin mod unavailable: ${error instanceof Error ? error.message : String(error)}`, 'warn');
+      }
+    }
 
     try {
       const synced = await syncCustomSkinLoader(instance);
@@ -891,6 +1006,7 @@ export async function launchInstance(instanceId: string): Promise<void> {
       prepared.assetsPath,
       java,
       skinInjection,
+      options?.join,
     );
     setState({ status: 'launching', instanceId, startedAt: Date.now() });
     log(`Launching: ${java.path} ${command.slice(1, 6).join(' ')} ...`);
@@ -955,6 +1071,10 @@ export async function launchInstance(instanceId: string): Promise<void> {
       );
       log(`Game exited with code ${code ?? 'unknown'}`, crashed ? 'error' : 'info');
       setState({ status: crashed ? 'crashed' : 'stopped', instanceId });
+      if (code === 0 && !crashed) {
+        const current = store.get().instances.find((item) => item.id === instanceId);
+        await rememberWorkingSetup(instanceId, current?.minecraftVersion ?? instance.minecraftVersion);
+      }
       if (crashed) events.toast('error', `${instance.name} crashed — check the launch logs`, 'errors');
       running = null;
     });

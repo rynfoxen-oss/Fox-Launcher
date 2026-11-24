@@ -17,6 +17,11 @@ set -euo pipefail
 
 HERE="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
 ARCH="\$(uname -m)"
+# A Rosetta-translated shell reports x86_64 even on Apple Silicon. Ask the
+# kernel directly so the setup never installs the slower Intel build by mistake.
+if [ "\$(sysctl -n hw.optional.arm64 2>/dev/null || echo 0)" = "1" ]; then
+  ARCH="arm64"
+fi
 
 case "\$ARCH" in
   arm64|aarch64)
@@ -43,7 +48,7 @@ echo "Installing to ~/Applications/Fox Launcher.app"
 mkdir -p "\$HOME/Applications"
 rm -rf "\$HOME/Applications/Fox Launcher.app"
 cp -R "\$SRC" "\$HOME/Applications/Fox Launcher.app"
-xattr -cr "\$HOME/Applications/Fox Launcher.app" 2>/dev/null || true
+xattr -d -r com.apple.quarantine "\$HOME/Applications/Fox Launcher.app" 2>/dev/null || true
 
 echo "Install complete. Opening Fox Launcher..."
 open "\$HOME/Applications/Fox Launcher.app"
@@ -64,7 +69,8 @@ You can also drag either app bundle to Applications yourself:
 - arm64/Fox Launcher.app  - Apple Silicon
 - x64/Fox Launcher.app    - Intel
 
-Game data is stored under ~/Library/Application Support/fox-launcher by default.
+Game data is stored under ~/Library/Application Support/Fox Launcher by default.
+(Use Settings -> Open data folder in Fox Launcher to confirm the exact path.)
 `;
 
 async function openZip(file) {

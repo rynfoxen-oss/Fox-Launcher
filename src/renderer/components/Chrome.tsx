@@ -16,6 +16,8 @@ import {
   Sparkles,
   Square,
   UserRound,
+  UserPlus,
+  Users,
   Wrench,
   X,
 } from 'lucide-react';
@@ -70,6 +72,8 @@ const NAV: Array<{ page: Page; key: string; icon: typeof Home }> = [
   { page: 'home', key: 'home', icon: Home },
   { page: 'instances', key: 'instances', icon: Boxes },
   { page: 'mods', key: 'mods', icon: Wrench },
+  { page: 'party', key: 'party', icon: Users },
+  { page: 'friends', key: 'friends', icon: UserPlus },
   { page: 'skins', key: 'skins', icon: Shirt },
   { page: 'performance', key: 'performancePage', icon: Gauge },
   { page: 'settings', key: 'settings', icon: Palette },

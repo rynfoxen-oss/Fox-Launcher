@@ -23,7 +23,7 @@ import {
   Wind,
   Zap,
 } from 'lucide-react';
-import type { InstalledMod, ModLoader, PerformancePreset, PerformanceSettings } from '../../shared/types';
+import type { InstalledMod, ModLoader, PerformancePreset, PerformanceSettings, SystemInfo } from '../../shared/types';
 import {
   applyGcMode,
   clampPerformanceSettings,
@@ -144,6 +144,15 @@ function loaderLabel(loader: ModLoader): string {
   return loader.charAt(0).toUpperCase() + loader.slice(1);
 }
 
+/** Conservative heap target: enough for modded Minecraft without starving the OS. */
+function recommendedMemoryMb(totalMb: number): number {
+  if (!Number.isFinite(totalMb) || totalMb <= 0) return 4096;
+  const gb = totalMb / 1024;
+  const target = gb <= 4 ? 1536 : gb <= 8 ? 3072 : gb <= 16 ? 5120 : gb <= 32 ? 8192 : 10240;
+  const safeCap = Math.floor((totalMb * 0.6) / 512) * 512;
+  return Math.max(512, Math.min(16384, Math.min(target, safeCap)));
+}
+
 export function PerformancePage() {
   const instances = useApp((state) => state.instances);
   const selectedInstanceId = useApp((state) => state.selectedInstanceId);
@@ -161,7 +170,16 @@ export function PerformancePage() {
   const [boosting, setBoosting] = useState(false);
   const [installingMods, setInstallingMods] = useState(false);
   const [modBusy, setModBusy] = useState<string | null>(null);
+  const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
   const gameRunning = launchState.status === 'preparing' || launchState.status === 'launching' || launchState.status === 'running';
+
+  useEffect(() => {
+    let active = true;
+    window.fox.app.systemInfo()
+      .then((info) => { if (active) setSystemInfo(info); })
+      .catch(() => { if (active) setSystemInfo(null); });
+    return () => { active = false; };
+  }, []);
 
   async function refreshInstalledMods() {
     if (!instance) return;
@@ -570,6 +588,21 @@ export function PerformancePage() {
                   ticks={['512 MB', '4 GB', '8 GB', '16 GB']}
                   onChange={(value) => update({ memoryMb: value })}
                 />
+                {systemInfo && (
+                  <div className="ram-recommendation">
+                    <span>
+                      Recommended for {Math.round(systemInfo.totalMemoryMb / 1024)} GB of RAM:
+                      {' '}{recommendedMemoryMb(systemInfo.totalMemoryMb)} MB
+                    </span>
+                    <button
+                      className="link-button"
+                      disabled={gameRunning || !draft || draft.memoryMb === recommendedMemoryMb(systemInfo.totalMemoryMb)}
+                      onClick={() => update({ memoryMb: recommendedMemoryMb(systemInfo.totalMemoryMb) })}
+                    >
+                      Use recommended
+                    </button>
+                  </div>
+                )}
                 <Field label="Java garbage collector" hint={gcHint}>
                   <Segmented
                     value={gcMode}

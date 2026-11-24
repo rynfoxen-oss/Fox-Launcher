@@ -44,7 +44,9 @@ export function InstanceCard({ instance, onOpen }: { instance: Instance; onOpen:
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [keepFiles, setKeepFiles] = useState(true);
   const menuRef = useRef<HTMLDivElement>(null);
-  const { refreshInstances, toast, navigate } = useApp();
+  const refreshInstances = useApp((state) => state.refreshInstances);
+  const toast = useApp((state) => state.toast);
+  const navigate = useApp((state) => state.navigate);
 
   // Closing on mouseleave made Rename/Clone miss clicks whenever the card's
   // hover lift moved the menu out from under the pointer. Close on an actual

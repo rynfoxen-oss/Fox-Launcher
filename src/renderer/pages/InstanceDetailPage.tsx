@@ -17,7 +17,12 @@ import { Button, ConfirmModal, EmptyState, Field, Segmented, Spinner, Toggle } f
 type Tab = 'general' | 'content' | 'logs';
 
 export function InstanceDetailPage() {
-  const { instances, selectedInstanceId, refreshInstances, toast, navigate, logs } = useApp();
+  const instances = useApp((state) => state.instances);
+  const selectedInstanceId = useApp((state) => state.selectedInstanceId);
+  const refreshInstances = useApp((state) => state.refreshInstances);
+  const toast = useApp((state) => state.toast);
+  const navigate = useApp((state) => state.navigate);
+  const logs = useApp((state) => state.logs);
   const t = useT();
   const instance = instances.find((item) => item.id === selectedInstanceId);
   const [tab, setTab] = useState<Tab>('general');

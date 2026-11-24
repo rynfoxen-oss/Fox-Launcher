@@ -2,20 +2,20 @@
 
 A modern Minecraft launcher for Windows and macOS, built with Electron, React, and TypeScript.
 
-**Current release: 1.2.3** (stable) — [download it here](https://github.com/rynfoxen-oss/Fox-Launcher/releases/tag/v1.2.3).
+**Current release: 1.2.4** (stable) — [download it here](https://github.com/rynfoxen-oss/Fox-Launcher/releases/tag/v1.2.4).
 
-> **Which branch is this?** The default `main` branch still contains the original C# launcher. This Electron launcher lives on the [`electron-launcher`](https://github.com/rynfoxen-oss/Fox-Launcher/tree/electron-launcher) branch, which is where the `v1.2.3` release tag points.
+> **Which branch is this?** The default `main` branch still contains the original C# launcher. This Electron launcher lives on the [`electron-launcher`](https://github.com/rynfoxen-oss/Fox-Launcher/tree/electron-launcher) branch, which is where the `v1.2.4` release tag points.
 
 ## Download
 
 | Platform | File |
 | --- | --- |
-| Windows 10/11 | `Fox.Launcher.Setup.1.2.3.exe` |
-| macOS — Apple Silicon | `Fox-Launcher-1.2.3-mac-arm64.zip` |
-| macOS — Intel | `Fox-Launcher-1.2.3-mac-x64.zip` |
-| macOS — guided installer | `Fox-Launcher-1.2.3-mac-setup.zip` |
+| Windows 10/11 | `Fox.Launcher.Setup.1.2.4.exe` |
+| macOS — Apple Silicon | `Fox-Launcher-1.2.4-mac-arm64.zip` |
+| macOS — Intel | `Fox-Launcher-1.2.4-mac-x64.zip` |
+| macOS — guided installer | `Fox-Launcher-1.2.4-mac-setup.zip` |
 
-All files are attached to the [1.2.3 release](https://github.com/rynfoxen-oss/Fox-Launcher/releases/tag/v1.2.3).
+All files are attached to the [1.2.4 release](https://github.com/rynfoxen-oss/Fox-Launcher/releases/tag/v1.2.4).
 
 On macOS, extract the ZIP and drag **Fox Launcher.app** to Applications. If macOS blocks an unsigned build, right-click the app and choose **Open**, or run:
 
@@ -70,18 +70,34 @@ Java 8+ is needed to play. The launcher detects common Java installations and ca
 
 ### Accounts and skins
 
-- Offline profiles are the supported account path in the interface; no Microsoft sign-in or Client ID setup is shown.
-- 3D skin preview (classic and slim models, capes where available) with zoom, rotation, front/back, cape, and reset controls.
+- Microsoft sign-in (device code) and offline profiles are supported. The Microsoft Client ID field is not shown; the launcher uses its built-in public client ID.
+- 3D skin preview (classic and slim models) with zoom, rotation, front/back, and reset controls.
 - Drop a PNG anywhere on the Skins page to import and instantly apply it. The model is detected from the texture, so Alex/slim skins are no longer turned into Steve.
 - Skin library with search, newest-first sorting, model badges, one-click "use preview on profile", and inline delete confirmation.
+- Classic/Slim can be chosen manually from the model selector or by clicking a skin's model badge, so a classic texture can be rendered slim (or vice versa). The choice is saved for the profile and offline-server mapping, and survives launcher restarts. New imports still auto-detect the model first.
 - Skins on offline-mode / cracked-style servers work **without** a server plugin such as SkinRestorer.
 - Existing library entries are rechecked on startup, and deleting a skin also cleans up its offline mappings.
+- **Cape wardrobe:** official capes owned by a Microsoft account are detected automatically and rendered in the 3D preview. Equip or hide them on your Mojang profile from the Cape wardrobe.
+- Custom cape PNGs (64x32 or 128x64) can be imported, previewed, applied, and removed locally. They are injected into offline skin sessions and CustomSkinLoader; Mojang profile capes cannot be replaced with custom images.
+- To make a custom cape visible to **other players** on an offline-mode/cracked server, upload the PNG to the same shared skin server (Blessing Skin, LittleSkin, etc.) that everyone uses, then set its authlib-injector/Yggdrasil URL in **Settings → Accounts → Shared skin API**. Fox Launcher will point the game at that shared API instead of its local one; no server plugin is needed, but every client must use the same API.
+
+### Friends, chat, and parties
+
+- Short friend codes (`FOX-XXXXXX`) and party codes (`FOXP-XXXXXX`) with checksum validation. Codes never carry your name, email, password, skin, or token.
+- Friend names and skins load from the other player's LAN launcher profile, so they match the name they signed up with. A local inline edit is available if a profile has not arrived yet.
+- Direct friend chat and voice calls over the local network. No hosted chat service, third-party tunnel, or website is involved.
+- Host-created dedicated Minecraft server with the LAN address, mod list, roster, and skins carried in the invite. Party chat is relayed by the host; the launcher never asks your router to open a port.
+- Remote play is available only through a VPN or manual network setup you control. Fox Launcher does not provide or configure a tunnel.
+- Party access: accounts signed in with Microsoft email can create or join a party; offline/cracked accounts whose got sign up with email and password can join. they need to create a name too.
 
 ### Launching
 
 - Official Mojang version manifests, asset indexes, assets, libraries, and native extraction.
 - Fabric/Quilt profiles come from their metadata APIs; Forge/NeoForge use their official headless installers.
 - Java auto-detection and optional auto-install, RAM allocation, custom JVM arguments, crash detection, and playtime tracking.
+- Clean exits save a per-instance recovery snapshot. After a crash, Home offers inline **Restore** to roll back graphics and Java settings.
+- Skin/model changes made while the game is open show an inline restart notice with a one-click **Restart game** action.
+- The Performance page recommends a conservative RAM allocation from installed system memory.
 - Windows installs are identified as **Fox Launcher** in Task Manager.
 - macOS includes an automatic performance profile and a native launch fix for LWJGL: the correct `natives-macos` / `natives-macos-arm64` libraries are extracted on x64 and Apple Silicon, and `-XstartOnFirstThread` is applied.
 
@@ -121,7 +137,7 @@ npm run installer:art  # regenerate NSIS header and welcome bitmaps
 | Platform | Location |
 | --- | --- |
 | Windows | `%APPDATA%/fox-launcher` |
-| macOS | `~/Library/Application Support/fox-launcher` |
+| macOS | `~/Library/Application Support/Fox Launcher` (confirm with **Settings → Open data folder**) |
 
 Shared game assets, versions, and libraries live in the `minecraft` subdirectory; each instance gets its own directory under `instances`.
 

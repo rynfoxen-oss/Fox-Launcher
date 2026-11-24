@@ -100,8 +100,8 @@ async function createStagingApp() {
   await fs.cp(path.join(root, 'dist'), path.join(staging, 'dist'), { recursive: true });
   await fs.cp(path.join(root, 'dist-electron'), path.join(staging, 'dist-electron'), { recursive: true });
   await fs.mkdir(path.join(staging, 'build'), { recursive: true });
-  for (const icon of ['icon.png', 'icon.ico', 'icon.icns']) {
-    await fs.copyFile(path.join(root, 'build', icon), path.join(staging, 'build', icon));
+  for (const asset of ['icon.png', 'icon.ico', 'icon.icns', 'fox-cape.png']) {
+    await fs.copyFile(path.join(root, 'build', asset), path.join(staging, 'build', asset));
   }
   const npmArgs = ['ci', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund'];
   const npmCli = path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
@@ -195,6 +195,7 @@ async function buildArch(arch, staging) {
   await copyLocalTree(zipfile, staging, appResourcesPrefix);
   zipfile.addFile(path.join(root, 'build', 'icon.icns'), `${resourcesPrefix}icon.icns`, { mode: 0o100644 });
   zipfile.addFile(path.join(root, 'build', 'authlib-injector.jar'), `${resourcesPrefix}authlib-injector.jar`, { mode: 0o100644 });
+  zipfile.addFile(path.join(root, 'build', 'fox-cape.png'), `${resourcesPrefix}fox-cape.png`, { mode: 0o100644 });
   zipfile.end();
   await outputDone;
   sourceZip.close();

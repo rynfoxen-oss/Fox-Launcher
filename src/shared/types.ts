@@ -37,10 +37,256 @@ export interface Account {
   expiresAt?: number;
   skinModel?: SkinModel;
   skinTexture?: string;
-  capeTexture?: string;
+
   skinHash?: string;
+  capes?: OfficialCape[];
+  cape?: CapeSelection;
+  /** Email used by email/password offline accounts and party identity. */
+  email?: string;
+  /** Set once the bundled free cape has been considered for this account. */
+  freeCapeGranted?: boolean;
   lastUsed: number;
 }
+
+/** Password verifier is kept out of Account objects sent to the renderer. */
+export interface EmailCredential {
+  salt: string;
+  hash: string;
+}
+
+export type PartyPresence = 'offline' | 'online' | 'in-game';
+
+/** Self-contained player look shared through the invite so no profile website is needed. */
+export interface PartySkin {
+  hash?: string;
+  name?: string;
+  model: SkinModel;
+  /** data:image/png;base64,… — empty means the viewer should use its Steve fallback. */
+  dataUrl: string;
+  capeDataUrl?: string;
+}
+
+export interface PartyMember {
+  name: string;
+  /** Short FOX- friend code so party members can be added without a long code. */
+  code?: string;
+  /** Never included in shareable invite codes or chat messages — local display only. */
+  email?: string;
+  accountType: Account['type'];
+  joinedAt: number;
+  status: 'host' | 'ready' | 'incompatible';
+  skin?: PartySkin;
+  presence?: PartyPresence;
+}
+
+export interface PartyMod {
+  fileName: string;
+  projectId?: string;
+  version?: string;
+}
+
+/** Host-local dedicated server status. Never encoded into invites. */
+export interface PartyServerState {
+  status: 'offline' | 'preparing' | 'installing' | 'starting' | 'running' | 'error';
+  message: string;
+  publicAddress?: string;
+  chatAddress?: string;
+  mode?: 'lan';
+  networkMessage?: string;
+  log?: string[];
+}
+
+export interface PartyMessage {
+  id: string;
+  author: string;
+  accountType: Account['type'];
+  text: string;
+  createdAt: number;
+  kind: 'chat' | 'system';
+}
+
+export interface PartyChatState {
+  status: 'offline' | 'connecting' | 'connected' | 'error';
+  message: string;
+  address?: string;
+  onlineCount?: number;
+}
+
+export interface PartyChatUpdate {
+  state: PartyChatState;
+  messages: PartyMessage[];
+  members: PartyMember[];
+  event: 'state' | 'roster' | 'message';
+}
+
+/** Local-only Discord-style contact. No friend list is uploaded anywhere. */
+export interface Friend {
+  id: string;
+  /** Short code such as FOX-AB12CD. */
+  code: string;
+  name: string;
+  /** True after the user edits the name inline; LAN profile updates then leave it alone. */
+  customName?: boolean;
+  accountType: Account['type'];
+  skin?: PartySkin;
+  presence: PartyPresence;
+  addedAt: number;
+  lastSeen: number;
+  source: 'code' | 'party';
+}
+
+/** A friend message stored locally and relayed directly over the LAN. */
+export interface FriendMessage {
+  id: string;
+  friendCode: string;
+  authorCode: string;
+  author: string;
+  text: string;
+  createdAt: number;
+  kind: 'chat' | 'system';
+  outgoing: boolean;
+}
+
+/** Peer advertised by another launcher on the local network. */
+export interface FriendPeer {
+  code: string;
+  name: string;
+  accountType: Account['type'];
+  host: string;
+  port: number;
+  lastSeen: number;
+  skin?: PartySkin;
+}
+
+export type FriendCallAction = 'start' | 'accept' | 'reject' | 'end';
+
+export interface FriendCallEvent {
+  friendCode: string;
+  callId: string;
+  action: FriendCallAction;
+  from: string;
+}
+
+export interface FriendSignal {
+  friendCode: string;
+  callId: string;
+  data: Record<string, unknown>;
+  from: string;
+}
+
+export interface FriendsUpdate {
+  event: 'peers' | 'message' | 'call' | 'signal' | 'identity';
+  peers: FriendPeer[];
+  messages: FriendMessage[];
+  call?: FriendCallEvent;
+  signal?: FriendSignal;
+}
+
+/** Payload inside a FOXF1 friend code. Emails and passwords are never included. */
+export interface FriendCode {
+  version: 1;
+  name: string;
+  accountType: Account['type'];
+  skin?: PartySkin;
+  createdAt: number;
+}
+
+export interface Party {
+  id: string;
+  name: string;
+  /** Short FOXP- code resolved through LAN discovery. */
+  shortCode?: string;
+  /** Optional VPN/manual address set by the host for friends outside the LAN. */
+  remoteAddress?: string;
+  inviteCode: string;
+  serverHost: string;
+  serverPort?: number;
+  /** Address of this launcher's direct chat relay. */
+  chatHost?: string;
+  chatPort?: number;
+  minecraftVersion: string;
+  loader: ModLoader;
+  loaderVersion?: string;
+  hostName: string;
+  /** Only stored on this machine; never encoded into an invite code. */
+  hostEmail?: string;
+  createdAt: number;
+  members: PartyMember[];
+  /** Mod manifest from the host instance, used to warn about missing mods. */
+  mods: PartyMod[];
+  /** Local instance that will be launched into the party server. */
+  instanceId?: string;
+  join: PartyJoin;
+  /** Only present on the host; tracks the auto-created dedicated server. */
+  server?: PartyServerState;
+  /** Direct host-relayed chat and presence state. */
+  chat?: PartyChatState;
+}
+
+export interface PartyInvite {
+  version: 1 | 2;
+  id: string;
+  shortCode?: string;
+  name: string;
+  serverHost: string;
+  serverPort?: number;
+  /** Address of the launcher-hosted chat relay; v2 invites include it. */
+  chatHost?: string;
+  chatPort?: number;
+  minecraftVersion: string;
+  loader: ModLoader;
+  loaderVersion?: string;
+  hostName: string;
+  createdAt: number;
+  members?: PartyMember[];
+  mods?: PartyMod[];
+}
+
+export interface PartyCreateInput {
+  name: string;
+  serverHost: string;
+  serverPort?: number;
+  instanceId: string;
+  /** Start a dedicated server on this machine for the local network only. */
+  autoServer?: boolean;
+}
+
+export interface PartyJoin {
+  host: string;
+  port?: number;
+}
+
+export interface PartyJoinResult {
+  party: Party;
+  instanceId: string;
+  join: PartyJoin;
+  /** Version/loader match. Mods can still differ on modded instances. */
+  compatible: boolean;
+  modMatch: boolean;
+  missingMods: string[];
+  notice: string;
+}
+
+export interface OfficialCape {
+  id: string;
+  alias?: string;
+  state: 'ACTIVE' | 'INACTIVE' | string;
+  url: string;
+}
+
+export interface CapeEntry {
+  hash: string;
+  name: string;
+  dataUrl: string;
+  createdAt: number;
+  /** Bundled Fox Launcher cape; kept in the library and not user-removable. */
+  builtin?: boolean;
+}
+
+export type CapeSelection =
+  | { type: 'official'; id: string; url: string; name: string }
+  | { type: 'custom'; hash: string }
+  | { type: 'none' };
 
 export interface Appearance {
   accent: string;
@@ -82,6 +328,12 @@ export interface Settings {
   telemetry: boolean;
   /** HTTPS GitHub releases API (or github.com/owner/repo) used by the startup update check. */
   updateFeedUrl?: string;
+  /**
+   * Shared authlib-injector Yggdrasil API used by offline accounts instead of
+   * Fox Launcher's local skin server. Every client pointing at the same URL
+   * resolves the same skins and capes, so other players can see custom capes.
+   */
+  sharedSkinApiUrl?: string;
 }
 
 export interface NewsItem {
@@ -112,6 +364,21 @@ export interface PerformanceSettings {
   entityShadows: boolean;
   mipmapLevels: number;
   vsync: boolean;
+}
+
+/** Last known-good performance setup, saved after a clean game exit. */
+export interface LaunchSnapshot {
+  instanceId: string;
+  savedAt: number;
+  minecraftVersion: string;
+  performance: PerformanceSettings;
+}
+
+export interface SystemInfo {
+  totalMemoryMb: number;
+  platform: string;
+  arch: string;
+  cpuCount: number;
 }
 
 export interface JavaInstallation {
@@ -270,6 +537,8 @@ export interface SkinEntry {
   hash: string;
   name: string;
   model: SkinModel;
+  /** True when the player explicitly chose Classic/Slim; auto-repair must not overwrite it. */
+  modelOverridden?: boolean;
   dataUrl: string;
   createdAt: number;
 }
@@ -293,6 +562,12 @@ export interface SkinApplyResult {
   uploaded: boolean;
   /** Where the skin will actually be used by the game. */
   target: 'microsoft-profile' | 'offline-session';
+  message: string;
+}
+
+export interface CapeApplyResult {
+  account: Account;
+  target: 'microsoft-profile' | 'local-only';
   message: string;
 }
 
@@ -330,6 +605,7 @@ export interface IpcApi {
     getVersion(): Promise<string>;
     getPath(name: 'userData' | 'downloads' | 'documents'): Promise<string>;
     openExternal(url: string): Promise<void>;
+    copyText(text: string): Promise<void>;
     showItemInFolder(path: string): Promise<void>;
     openFolder(path: string): Promise<void>;
     selectFile(filters?: { name: string; extensions: string[] }[]): Promise<string | null>;
@@ -343,6 +619,7 @@ export interface IpcApi {
     clearDownloadHistory(): Promise<void>;
     getDiagnostics(): Promise<DiagnosticStats>;
     clearDiagnostics(): Promise<void>;
+    systemInfo(): Promise<SystemInfo>;
   };
   settings: {
     get(): Promise<Settings>;
@@ -365,7 +642,9 @@ export interface IpcApi {
   accounts: {
     list(): Promise<Account[]>;
     addOffline(name: string): Promise<Account>;
-    loginMicrosoft(clientId: string): Promise<{ verificationUri: string; userCode: string; sessionId: string }>;
+    signupEmail(name: string, email: string, password: string): Promise<Account>;
+    loginEmail(email: string, password: string): Promise<Account>;
+    loginMicrosoft(): Promise<{ verificationUri: string; userCode: string; sessionId: string }>;
     pollMicrosoft(sessionId: string): Promise<Account | { pending: true }>;
     remove(id: string): Promise<void>;
     select(id: string): Promise<Account[]>;
@@ -373,10 +652,12 @@ export interface IpcApi {
     uploadSkin(accountId: string, model?: SkinModel): Promise<SkinApplyResult>;
   };
   launcher: {
-    launch(instanceId: string): Promise<void>;
+    launch(instanceId: string, join?: PartyJoin): Promise<void>;
     stop(): Promise<void>;
     state(): Promise<LaunchState>;
     logs(): Promise<LaunchLogLine[]>;
+    getSnapshot(instanceId: string): Promise<LaunchSnapshot | null>;
+    restoreSnapshot(instanceId: string): Promise<LaunchSnapshot>;
   };
   mods: {
     search(query: string, loader: ModLoader, mcVersion: string, category: string, source: 'modrinth' | 'curseforge'): Promise<ModSearchResult[]>;
@@ -405,9 +686,54 @@ export interface IpcApi {
     importData(name: string, dataUrl: string): Promise<SkinEntry | null>;
     remove(hash: string): Promise<SkinEntry[]>;
     select(hash: string, accountId: string, model?: SkinModel): Promise<SkinApplyResult>;
+    setModel(hash: string, model: SkinModel): Promise<SkinEntry>;
+
     listOfflinePlayers(): Promise<OfflineSkinEntry[]>;
-    addOfflinePlayer(name: string, hash?: string): Promise<OfflineSkinEntry>;
+    addOfflinePlayer(name: string, hash?: string, model?: SkinModel): Promise<OfflineSkinEntry>;
     removeOfflinePlayer(name: string): Promise<OfflineSkinEntry[]>;
+  };
+  party: {
+    current(): Promise<Party | null>;
+    create(input: PartyCreateInput): Promise<Party>;
+    join(inviteCode: string, preferredInstanceId?: string): Promise<PartyJoinResult>;
+    joinByAddress(address: string, preferredInstanceId?: string): Promise<PartyJoinResult>;
+    setRemoteAddress(address: string, chatPort?: number): Promise<Party>;
+    selectInstance(instanceId: string): Promise<PartyJoinResult>;
+    leave(): Promise<void>;
+    /** Pollable host-side server progress; no popup is ever shown. */
+    serverStatus(): Promise<{ party: Party | null; server: PartyServerState }>;
+    serverStop(): Promise<Party | null>;
+    chatStatus(): Promise<PartyChatUpdate>;
+    chatSend(text: string): Promise<void>;
+    chatPresence(presence: PartyPresence): Promise<void>;
+    onChat(callback: (update: PartyChatUpdate) => void): () => void;
+  };
+  friends: {
+    list(): Promise<Friend[]>;
+    myCode(): Promise<string>;
+    peers(): Promise<FriendPeer[]>;
+    addCode(code: string): Promise<Friend[]>;
+    addPartyMember(member: PartyMember): Promise<Friend[]>;
+    remove(id: string): Promise<Friend[]>;
+    rename(id: string, name: string): Promise<Friend[]>;
+    messages(friendCode: string): Promise<FriendMessage[]>;
+    sendMessage(friendCode: string, text: string): Promise<FriendMessage[]>;
+    callStart(friendCode: string): Promise<FriendCallEvent>;
+    callAccept(friendCode: string, callId: string): Promise<void>;
+    callReject(friendCode: string, callId: string): Promise<void>;
+    callEnd(friendCode: string): Promise<void>;
+    voiceSend(friendCode: string, pcm: string, callId: string): Promise<void>;
+    onUpdate(callback: (update: FriendsUpdate) => void): () => void;
+  };
+  capes: {
+    list(): Promise<CapeEntry[]>;
+    import(): Promise<CapeEntry | null>;
+    importData(name: string, dataUrl: string): Promise<CapeEntry | null>;
+    remove(hash: string): Promise<CapeEntry[]>;
+    refreshOfficial(accountId: string): Promise<Account>;
+    applyOfficial(accountId: string, capeId: string): Promise<Account>;
+    applyCustom(accountId: string, hash: string): Promise<CapeApplyResult>;
+    clear(accountId: string): Promise<Account>;
   };
   news: {
     get(): Promise<NewsItem[]>;

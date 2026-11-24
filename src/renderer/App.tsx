@@ -6,12 +6,14 @@ import { HomePage } from './pages/HomePage';
 import { InstancesPage } from './pages/InstancesPage';
 import { InstanceDetailPage } from './pages/InstanceDetailPage';
 import { ModsPage } from './pages/ModsPage';
+import { PartyPage } from './pages/PartyPage';
+import { FriendsPage } from './pages/FriendsPage';
 import { SkinsPage } from './pages/SkinsPage';
 import { PerformancePage } from './pages/PerformancePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { applyAppearance, IS_MAC } from './theme';
 
-const SHORTCUT_PAGES: Page[] = ['home', 'instances', 'mods', 'skins', 'performance', 'settings'];
+const SHORTCUT_PAGES: Page[] = ['home', 'instances', 'mods', 'party', 'friends', 'skins', 'performance', 'settings'];
 
 // macOS keeps the same scenes but with fewer simultaneously animated nodes.
 const COMET_COUNT = IS_MAC ? 3 : 6;
@@ -112,6 +114,8 @@ export default function App() {
           {page === 'instances' && <InstancesPage />}
           {page === 'instance' && <InstanceDetailPage />}
           {page === 'mods' && <ModsPage />}
+          {page === 'party' && <PartyPage />}
+          {page === 'friends' && <FriendsPage />}
           {page === 'skins' && <SkinsPage />}
           {page === 'performance' && <PerformancePage />}
           {page === 'settings' && <SettingsPage />}

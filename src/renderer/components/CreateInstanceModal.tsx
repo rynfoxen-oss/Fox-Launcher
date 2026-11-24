@@ -24,7 +24,9 @@ const LOADERS: Array<{ id: ModLoader; label: string }> = [
 ];
 
 export function CreateInstanceModal({ onClose }: { onClose: () => void }) {
-  const { instances, settings, refreshInstances, toast } = useApp();
+  const settings = useApp((state) => state.settings);
+  const refreshInstances = useApp((state) => state.refreshInstances);
+  const toast = useApp((state) => state.toast);
   const [name, setName] = useState('New Instance');
   const [version, setVersion] = useState('');
   const [loader, setLoader] = useState<ModLoader>('fabric');

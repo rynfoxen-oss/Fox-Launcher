@@ -2,15 +2,37 @@ import { app } from 'electron';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { inferSkinModel } from './auth';
-import type { Account, DownloadProgress, Instance, OfflineSkinEntry, Settings, SkinEntry } from '../shared/types';
+import type {
+  Account,
+  CapeEntry,
+  DownloadProgress,
+  EmailCredential,
+  Friend,
+  FriendMessage,
+  Instance,
+  LaunchSnapshot,
+  OfflineSkinEntry,
+  Party,
+  Settings,
+  SkinEntry,
+} from '../shared/types';
 
 export interface LauncherData {
   settings: Settings;
   instances: Instance[];
   accounts: Account[];
   skins: SkinEntry[];
+  capes: CapeEntry[];
   offlineSkins: OfflineSkinEntry[];
   downloadHistory: DownloadProgress[];
+  /** Last clean-exit performance setup per instance, used for crash rollback. */
+  launchSnapshots: Record<string, LaunchSnapshot>;
+  /** Salted scrypt verifiers for Fox ID email accounts. Passwords are never stored. */
+  emailCredentials: Record<string, EmailCredential>;
+  party: Party | null;
+  friends: Friend[];
+  /** Local direct messages; never sent to a server. */
+  friendMessages: FriendMessage[];
   selectedAccountId?: string;
 }
 
@@ -42,6 +64,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoInstallJava: true,
   telemetry: false,
   updateFeedUrl: 'https://github.com/rynfoxen-oss/Fox-Launcher',
+  sharedSkinApiUrl: '',
 };
 
 function defaultData(): LauncherData {
@@ -50,8 +73,14 @@ function defaultData(): LauncherData {
     instances: [],
     accounts: [],
     skins: [],
+    capes: [],
     offlineSkins: [],
     downloadHistory: [],
+    launchSnapshots: {},
+    emailCredentials: {},
+    party: null,
+    friends: [],
+    friendMessages: [],
   };
 }
 
@@ -108,13 +137,35 @@ class Store {
         settings.updateFeedUrl?.trim() ?? '',
       );
       if (apiLatest) settings.updateFeedUrl = `https://github.com/${apiLatest[1]}/${apiLatest[2]}`;
+      const launchSnapshots: Record<string, LaunchSnapshot> = {};
+      if (isPlainObject(parsed.launchSnapshots)) {
+        for (const [id, value] of Object.entries(parsed.launchSnapshots)) {
+          if (isPlainObject(value) && isPlainObject(value.performance)) {
+            launchSnapshots[id] = value as unknown as LaunchSnapshot;
+          }
+        }
+      }
+      const emailCredentials: Record<string, EmailCredential> = {};
+      if (isPlainObject(parsed.emailCredentials)) {
+        for (const [id, value] of Object.entries(parsed.emailCredentials)) {
+          if (isPlainObject(value) && typeof value.salt === 'string' && typeof value.hash === 'string') {
+            emailCredentials[id] = { salt: value.salt, hash: value.hash };
+          }
+        }
+      }
       this.data = {
         settings,
         instances: Array.isArray(parsed.instances) ? parsed.instances : [],
         accounts: Array.isArray(parsed.accounts) ? parsed.accounts : [],
         skins: Array.isArray(parsed.skins) ? parsed.skins : [],
+        capes: Array.isArray(parsed.capes) ? parsed.capes : [],
         offlineSkins: Array.isArray(parsed.offlineSkins) ? parsed.offlineSkins : [],
         downloadHistory: Array.isArray(parsed.downloadHistory) ? parsed.downloadHistory.slice(-50) : [],
+        launchSnapshots,
+        emailCredentials,
+        party: isPlainObject(parsed.party) ? parsed.party as unknown as Party : null,
+        friends: Array.isArray(parsed.friends) ? parsed.friends as unknown as Friend[] : [],
+        friendMessages: Array.isArray(parsed.friendMessages) ? parsed.friendMessages as unknown as FriendMessage[] : [],
         selectedAccountId: parsed.selectedAccountId,
       };
     } catch (error) {
@@ -141,9 +192,16 @@ class Store {
         return match ? Buffer.from(match[1], 'base64') : null;
       });
       if (!buffer) continue;
-      const model = inferSkinModel(buffer);
-      if (skin.model !== model) {
-        skin.model = model;
+      const detected = inferSkinModel(buffer);
+      if (skin.modelOverridden === undefined) {
+        // Legacy entries have no override marker. Preserve any model that
+        // differs from detection as an explicit choice; leave the rest on auto
+        // so the old HD/slim detection fix still applies.
+        skin.modelOverridden = skin.model !== detected;
+        changed = true;
+      }
+      if (!skin.modelOverridden && skin.model !== detected) {
+        skin.model = detected;
         changed = true;
       }
     }
@@ -179,6 +237,25 @@ class Store {
       console.error('[Store] Failed to save:', error);
     });
     await this.writeChain;
+  }
+
+  getLaunchSnapshot(instanceId: string): LaunchSnapshot | null {
+    return this.data.launchSnapshots?.[instanceId] ?? null;
+  }
+
+  async saveLaunchSnapshot(snapshot: LaunchSnapshot): Promise<void> {
+    const previous = this.data.launchSnapshots ?? {};
+    const entries = Object.entries(previous).sort((a, b) => b[1].savedAt - a[1].savedAt);
+    const trimmed = Object.fromEntries(entries.slice(0, 19));
+    this.data.launchSnapshots = { ...trimmed, [snapshot.instanceId]: snapshot };
+    await this.save();
+  }
+
+  async deleteLaunchSnapshot(instanceId: string): Promise<void> {
+    const next = { ...(this.data.launchSnapshots ?? {}) };
+    delete next[instanceId];
+    this.data.launchSnapshots = next;
+    await this.save();
   }
 
   async updateSettings(patch: Partial<Settings>): Promise<Settings> {
@@ -226,7 +303,7 @@ class Store {
   async deleteInstance(id: string): Promise<void> {
     this.data.instances = this.data.instances.filter((item) => item.id !== id);
     if (this.data.settings.lastInstanceId === id) delete this.data.settings.lastInstanceId;
-    await this.save();
+    await this.deleteLaunchSnapshot(id);
   }
 
   async upsertAccount(account: Account): Promise<void> {
@@ -238,7 +315,40 @@ class Store {
 
   async deleteAccount(id: string): Promise<void> {
     this.data.accounts = this.data.accounts.filter((item) => item.id !== id);
+    delete this.data.emailCredentials[id];
     if (this.data.selectedAccountId === id) this.data.selectedAccountId = this.data.accounts[0]?.id;
+    await this.save();
+  }
+
+  getEmailCredential(id: string): EmailCredential | undefined {
+    return this.data.emailCredentials[id];
+  }
+
+  async setEmailCredential(id: string, credential: EmailCredential): Promise<void> {
+    this.data.emailCredentials[id] = credential;
+    await this.save();
+  }
+
+  async setParty(party: Party | null): Promise<void> {
+    this.data.party = party;
+    await this.save();
+  }
+
+  listFriends(): Friend[] {
+    return this.data.friends ?? [];
+  }
+
+  async setFriends(friends: Friend[]): Promise<void> {
+    this.data.friends = friends;
+    await this.save();
+  }
+
+  listFriendMessages(): FriendMessage[] {
+    return this.data.friendMessages ?? [];
+  }
+
+  async setFriendMessages(messages: FriendMessage[]): Promise<void> {
+    this.data.friendMessages = messages;
     await this.save();
   }
 

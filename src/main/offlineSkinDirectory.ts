@@ -2,7 +2,8 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
 import { inferSkinModel, offlineUuid } from './auth';
-import { sanitizeSkin } from './skins';
+import { normalizeTexture } from './skinImage';
+import { assignSkinModel } from './skins';
 import { store } from './store';
 import { syncAllCustomSkinLoaders } from './customSkinLoader';
 import { ensureDir, fetchJson, sha256 } from './utils';
@@ -103,7 +104,11 @@ export function listOfflinePlayers(): OfflineSkinEntry[] {
  * skin is fetched from Mojang's public profile API; with a hash the selected
  * library skin is assigned manually.
  */
-export async function addOfflinePlayer(name: string, hash?: string): Promise<OfflineSkinEntry> {
+export async function addOfflinePlayer(
+  name: string,
+  hash?: string,
+  requestedModel?: SkinModel,
+): Promise<OfflineSkinEntry> {
   const clean = name.trim();
   if (!NAME_RE.test(clean)) {
     throw new Error('Enter a valid Minecraft name: 1-16 letters, numbers or underscores');
@@ -120,32 +125,41 @@ export async function addOfflinePlayer(name: string, hash?: string): Promise<Off
     if (!skin) throw new Error('Skin not found');
     texture = await fs.readFile(skinFilePath(hash)).catch(() =>
       Buffer.from(skin.dataUrl.slice(skin.dataUrl.indexOf(',') + 1), 'base64'));
-    model = skin.model;
+    model = requestedModel ?? skin.model;
+    if (requestedModel && (skin.model !== requestedModel || !skin.modelOverridden)) {
+      assignSkinModel(store.get(), hash, requestedModel);
+    }
     source = 'manual';
   } else {
     const fetched = await fetchPremiumSkin(clean);
     texture = fetched.buffer;
-    model = fetched.model;
+    model = requestedModel ?? fetched.model;
     onlineUuid = fetched.onlineUuid;
     canonicalName = fetched.name;
     source = 'mojang';
   }
 
-  texture = sanitizeSkin(texture);
+  const normalized = await normalizeTexture(texture, 'skin');
+  texture = normalized.buffer;
+  if (!requestedModel) model = normalized.model;
   const skinHash = sha256(texture.toString('base64'));
   await ensureDir(skinsDir());
   await fs.writeFile(skinFilePath(skinHash), texture).catch(() => undefined);
 
   const data = store.get();
-  if (!data.skins.some((skin) => skin.hash === skinHash)) {
+  const existingSkin = data.skins.find((skin) => skin.hash === skinHash);
+  if (!existingSkin) {
     const entry: SkinEntry = {
       hash: skinHash,
       name: canonicalName,
       model,
+      modelOverridden: Boolean(requestedModel),
       dataUrl: `data:image/png;base64,${texture.toString('base64')}`,
       createdAt: Date.now(),
     };
     data.skins.unshift(entry);
+  } else if (requestedModel && (existingSkin.model !== requestedModel || !existingSkin.modelOverridden)) {
+    assignSkinModel(data, skinHash, requestedModel);
   }
 
   const previous = (data.offlineSkins ?? []).find(

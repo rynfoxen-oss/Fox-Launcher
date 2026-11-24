@@ -1,6 +1,6 @@
 {
   "name": "fox-launcher",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Fox Launcher",
   "main": "dist-electron/main/index.js",
   "author": "Fox Launcher",
@@ -14,7 +14,7 @@
     "dev": "concurrently -k -n VITE,ELECTRON -c cyan,magenta \"vite\" \"wait-on http://127.0.0.1:5173 && cross-env FOX_DEV=1 electron .\"",
     "build:main": "tsc -p tsconfig.main.json",
     "build:renderer": "tsc -p tsconfig.json && vite build",
-    "build": "npm run build:main && npm run build:renderer",
+    "build": "npm run cape:art && npm run build:main && npm run build:renderer",
     "package": "npm run build && electron-builder",
     "package:dir": "npm run build && electron-builder --dir",
     "package:mac": "npm run build && node scripts/package-mac.mjs",
@@ -25,6 +25,7 @@
     "package:mac:setup": "node scripts/package-mac-setup.mjs",
     "release:mac": "npm run package:mac && npm run package:mac:setup",
     "icon": "node scripts/generate-icon.js",
+    "cape:art": "node scripts/generate-fox-cape.mjs",
     "installer:art": "node scripts/generate-installer-art.js",
     "release": "npm run build && electron-builder --publish always",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit"
@@ -119,12 +120,20 @@
       "build/icon.ico",
       "build/icon.png",
       "build/icon.icns",
+      "build/fox-cape.png",
       "package.json"
+    ],
+    "asarUnpack": [
+      "dist-electron/main/**/*"
     ],
     "extraResources": [
       {
         "from": "build/authlib-injector.jar",
         "to": "authlib-injector.jar"
+      },
+      {
+        "from": "build/fox-cape.png",
+        "to": "fox-cape.png"
       }
     ]
   }

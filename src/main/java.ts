@@ -14,7 +14,13 @@ async function macJavaHomes(): Promise<string[]> {
   if (process.platform !== 'darwin') return [];
   try {
     const { stdout, stderr } = await execFileAsync('/usr/libexec/java_home', ['-V'], { timeout: 8000 });
-    return [...`${stdout}\n${stderr}`.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+    // java_home -V prints: 21.0.2, 0x...: "Vendor Name" /path/to/Home
+    // The quoted value is the vendor, not the JVM directory.
+    return `${stdout}\n${stderr}`
+      .split(/\r?\n/)
+      .map((line) => /"[^"]+"\s+(.+)$/.exec(line.trim())?.[1]?.trim())
+      .filter((home): home is string => Boolean(home))
+      .map((home) => path.join(home, 'bin', 'java'));
   } catch {
     return [];
   }

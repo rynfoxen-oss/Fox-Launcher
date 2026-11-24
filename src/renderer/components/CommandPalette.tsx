@@ -14,6 +14,8 @@ import {
   Search,
   Settings2,
   Shirt,
+  UserPlus,
+  Users,
   Wrench,
   X,
 } from 'lucide-react';
@@ -34,6 +36,8 @@ const PAGES: Array<{ page: Page; label: string; detail: string; icon: ReactNode 
   { page: 'home', label: 'Home', detail: 'Your launcher dashboard', icon: <Home size={16} /> },
   { page: 'instances', label: 'Instances', detail: 'Manage Minecraft profiles', icon: <Boxes size={16} /> },
   { page: 'mods', label: 'Mods', detail: 'Discover Modrinth content', icon: <Wrench size={16} /> },
+  { page: 'party', label: 'Party', detail: 'Invite friends to the same server', icon: <Users size={16} /> },
+  { page: 'friends', label: 'Friends', detail: 'Local friend codes and skins', icon: <UserPlus size={16} /> },
   { page: 'skins', label: 'Skins', detail: 'Skins and offline profiles', icon: <Shirt size={16} /> },
   { page: 'performance', label: 'Performance', detail: 'FPS presets and Java tuning', icon: <Gauge size={16} /> },
   { page: 'settings', label: 'Settings', detail: 'Themes, language and behavior', icon: <Settings2 size={16} /> },

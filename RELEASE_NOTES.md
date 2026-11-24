@@ -1,3 +1,26 @@
+# Fox Launcher 1.2.4
+
+This release adds local friend chat, voice calls, short codes, and direct host-created party servers. Everything stays on your LAN unless you explicitly use your own VPN or manual setup. No third-party tunnel, hosted chat service, or router port opening is used.
+
+## What's new
+
+- **Short friend codes:** `FOX-XXXXXX` codes with checksum validation. Codes do not contain your name, email, password, skin, or token. Friend names and skins are loaded from the other player's LAN profile, so they match the name they signed up with. You can still edit a name inline locally.
+- **Friend chat and voice:** direct messages and voice calls over the local network. Incoming messages now open in the correct conversation and in the right order. Copy buttons use the native clipboard.
+- **Short party codes:** `FOXP-XXXXXX` codes resolve the host's invite over LAN. The invite carries the server address, mod list, roster, and skins without using a hosted service.
+- **Host-created server:** the host can auto-create a dedicated Minecraft server or use a manual server address. Party chat is relayed by the host, and roster names come from the players' real launcher identities.
+- **Remote play guide:** friends outside the LAN can join through a VPN/manual `host:port`, or by direct address. Fox Launcher never opens router ports; remote access needs a setup you control.
+- **More reliable LAN discovery:** discovery broadcasts on every local subnet instead of relying only on the global broadcast address.
+- **Party access:** accounts signed in with Microsoft email can create or join a party; offline/cracked accounts whose got sign up with email and password can join. they need to create a name too.
+
+## Downloads
+
+- Windows: `Fox.Launcher.Setup.1.2.4.exe`
+- macOS — Apple Silicon: `Fox-Launcher-1.2.4-mac-arm64.zip`
+- macOS — Intel: `Fox-Launcher-1.2.4-mac-x64.zip`
+- macOS — guided installer: `Fox-Launcher-1.2.4-mac-setup.zip`
+
+## Previous release
+
 # Fox Launcher 1.2.3
 
 This release adds silent in-app updates. You can install a newer Fox Launcher from the update banner or Settings without being sent to GitHub.
@@ -45,7 +68,7 @@ The `mac-setup.zip` installer removes the quarantine attribute automatically, bu
 Game data is stored under:
 
 ```text
-~/Library/Application Support/fox-launcher
+~/Library/Application Support/Fox Launcher
 ```
 
 ### macOS performance

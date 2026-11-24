@@ -121,14 +121,16 @@ function assetSha256(asset: ReleaseAsset | undefined): string | undefined {
 function pickInstaller(release: ReleasePayload): ReleaseAsset | undefined {
   const assets = Array.isArray(release.assets) ? release.assets : [];
   if (process.platform === 'darwin') {
-    const mac = assets.filter((asset) => /\.(zip|dmg)$/i.test(asset.name ?? '')
+    // The in-app updater extracts ZIP app bundles. DMGs need manual mounting
+    // and the dual-arch setup ZIP contains two bundles, so neither is eligible.
+    const mac = assets.filter((asset) => /\.zip$/i.test(asset.name ?? '')
+      && !/-mac-setup\.zip$/i.test(asset.name ?? '')
       && /mac|darwin|osx|arm64|aarch64|x64|x86_64|intel/i.test(asset.name ?? '')
       && asset.browser_download_url);
     const archPattern = process.arch === 'arm64' ? /arm64|aarch64/i : /x64|x86_64|intel/i;
     return mac.find((asset) => archPattern.test(asset.name ?? ''))
       ?? mac.find((asset) => /mac|darwin|osx/i.test(asset.name ?? ''))
-      ?? mac[0]
-      ?? assets.find((asset) => /\.(zip|dmg)$/i.test(asset.name ?? '') && asset.browser_download_url);
+      ?? mac[0];
   }
   const executable = assets.filter((asset) => /\.exe$/i.test(asset.name ?? '') && asset.browser_download_url);
   return executable.find((asset) => /install|setup/i.test(asset.name ?? ''))

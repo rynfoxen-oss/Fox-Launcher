@@ -6,6 +6,8 @@ import type {
   DownloadSnapshot,
   LaunchLogLine,
   LaunchState,
+  FriendsUpdate,
+  PartyChatUpdate,
   SelfUpdateStatus,
   UpdateCheckResult,
 } from '../shared/types';
@@ -78,6 +80,16 @@ class AppEvents extends EventEmitter {
 
   updateProgress(status: SelfUpdateStatus): void {
     this.emitToRenderer('app:updateProgress', status);
+  }
+
+  partyChat(update: PartyChatUpdate): void {
+    this.emit('partyChat', update);
+    this.emitToRenderer('app:partyChat', update);
+  }
+
+  friends(update: FriendsUpdate): void {
+    this.emit('friends', update);
+    this.emitToRenderer('app:friends', update);
   }
 
   toast(_type: 'success' | 'error' | 'info', _message: string, _category = 'general'): void {

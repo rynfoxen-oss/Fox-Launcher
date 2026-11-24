@@ -9,7 +9,9 @@ import { Button, EmptyState, Segmented } from '../components/Common';
 type SortMode = 'recent' | 'name' | 'playtime';
 
 export function InstancesPage() {
-  const { instances, refreshInstances, toast } = useApp();
+  const instances = useApp((state) => state.instances);
+  const refreshInstances = useApp((state) => state.refreshInstances);
+  const toast = useApp((state) => state.toast);
   const focusTarget = useApp((state) => state.focusTarget);
   const t = useT();
   const [query, setQuery] = useState('');

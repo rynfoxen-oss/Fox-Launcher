@@ -1,10 +1,18 @@
 import * as crypto from 'crypto';
 import { fetchJson } from './utils';
-import type { Account, SkinModel } from '../shared/types';
+import { inferSkinModelLocal } from './skinImage';
+import type { Account, CapeSelection, OfficialCape, SkinModel } from '../shared/types';
+
+/** Public Minecraft Launcher client ID registered on the legacy Live endpoint. */
+const MICROSOFT_CLIENT_ID = '00000000402b5328';
+const V1_SCOPE = 'service::user.auth.xboxlive.com::MBI_SSL';
+const V2_SCOPE = 'XboxLive.signin offline_access openid profile email';
 
 interface DeviceSession {
   deviceCode: string;
   clientId: string;
+  /** Legacy Live IDs use oauth20_connect.srf; Azure GUIDs use the v2 endpoint. */
+  v1: boolean;
   interval: number;
   expiresAt: number;
   lastPoll: number;
@@ -13,9 +21,27 @@ interface DeviceSession {
 interface MsTokenResponse {
   access_token: string;
   refresh_token?: string;
+  id_token?: string;
   expires_in: number;
   error?: string;
   error_description?: string;
+}
+
+/** V2 device-code responses include an OIDC id_token with the account email. */
+function emailFromIdToken(idToken?: string): string | undefined {
+  if (!idToken) return undefined;
+  try {
+    const payload = idToken.split('.')[1];
+    if (!payload) return undefined;
+    const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
+      email?: string;
+      preferred_username?: string;
+    };
+    const value = claims.email || claims.preferred_username;
+    return value && value.includes('@') ? value.toLowerCase() : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 interface DeviceCodeResponse {
@@ -38,7 +64,7 @@ export interface MinecraftProfile {
   id: string;
   name: string;
   skins?: MinecraftProfileSkin[];
-  capes?: Array<{ url: string }>;
+  capes?: OfficialCape[];
 }
 
 const sessions = new Map<string, DeviceSession>();
@@ -48,6 +74,67 @@ const XBOX_HEADERS = {
   Accept: 'application/json',
   'x-xbl-contract-version': '1',
 };
+
+/** OAuth token endpoints return errors in JSON with HTTP 400, so fetchJson cannot be used here. */
+async function postForm<T>(url: string, params: Record<string, string>, timeoutMs = 30_000): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+      body: new URLSearchParams(params).toString(),
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    let parsed: unknown = {};
+    if (text) {
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        if (!response.ok) throw new Error(`Microsoft sign-in failed (${response.status})`);
+      }
+    }
+    // OAuth protocol errors (authorization_pending, invalid_grant, etc.) are data,
+    // not transport failures. Callers inspect response.error and decide.
+    if (!response.ok && (!parsed || typeof parsed !== 'object' || !('error' in parsed))) {
+      throw new Error(`Microsoft sign-in failed (${response.status}): ${text.slice(0, 200)}`);
+    }
+    return parsed as T;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Xbox endpoints also return details in JSON on HTTP 400; keep them for useful errors. */
+async function postJson<T>(url: string, body: unknown, timeoutMs = 30_000): Promise<T & { status?: number }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: XBOX_HEADERS,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    let parsed: Record<string, unknown> = {};
+    if (text) {
+      try {
+        parsed = JSON.parse(text) as Record<string, unknown>;
+      } catch {
+        // Some Xbox errors return HTML; keep the status and raw text below.
+      }
+    }
+    return { ...parsed, status: response.status } as T & { status?: number };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function isLegacyClientId(clientId: string): boolean {
+  return /^[0-9a-f]{16}$/i.test(clientId);
+}
 
 export function offlineUuid(name: string): string {
   const hash = crypto.createHash('md5').update(`OfflinePlayer:${name}`).digest();
@@ -71,29 +158,26 @@ export function createOfflineAccount(name: string): Account {
   };
 }
 
-export async function beginMicrosoftLogin(clientId: string): Promise<{
+export async function beginMicrosoftLogin(clientId?: string): Promise<{
   verificationUri: string;
   userCode: string;
   sessionId: string;
 }> {
-  if (!clientId.trim()) throw new Error('A Microsoft Client ID is required in Settings → Accounts');
-  const body = new URLSearchParams({
-    client_id: clientId.trim(),
-    scope: 'XboxLive.signin offline_access openid profile email',
-  });
-  const response = await fetchJson<DeviceCodeResponse>(
-    'https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
-    },
+  const id = (clientId?.trim() || MICROSOFT_CLIENT_ID);
+  const v1 = isLegacyClientId(id);
+  const response = await postForm<DeviceCodeResponse & { error?: string; error_description?: string }>(
+    v1 ? 'https://login.live.com/oauth20_connect.srf' : 'https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode',
+    v1
+      ? { client_id: id, scope: V1_SCOPE, response_type: 'device_code' }
+      : { client_id: id, scope: V2_SCOPE },
   );
+  if (response.error) throw new Error(response.error_description ?? `Microsoft sign-in failed: ${response.error}`);
   if (!response.device_code) throw new Error('Microsoft did not return a device code');
   const sessionId = crypto.randomUUID();
   sessions.set(sessionId, {
     deviceCode: response.device_code,
-    clientId: clientId.trim(),
+    clientId: id,
+    v1,
     interval: Math.max(1, response.interval || 5),
     expiresAt: Date.now() + response.expires_in * 1000,
     lastPoll: 0,
@@ -105,57 +189,91 @@ export async function beginMicrosoftLogin(clientId: string): Promise<{
   };
 }
 
+function tokenEndpoint(v1: boolean): string {
+  return v1
+    ? 'https://login.live.com/oauth20_token.srf'
+    : 'https://login.microsoftonline.com/consumers/oauth2/v2.0/token';
+}
+
 async function requestToken(session: DeviceSession, grant: Record<string, string>): Promise<MsTokenResponse> {
-  const body = new URLSearchParams({
+  return postForm<MsTokenResponse>(tokenEndpoint(session.v1), {
     client_id: session.clientId,
-    scope: 'XboxLive.signin offline_access openid profile email',
+    scope: session.v1 ? V1_SCOPE : V2_SCOPE,
     ...grant,
-  });
-  return fetchJson<MsTokenResponse>('https://login.microsoftonline.com/consumers/oauth2/v2.0/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
   });
 }
 
-async function authenticateXbox(accessToken: string): Promise<{ token: string; uhs: string }> {
-  const xbl = await fetchJson<{ Token: string }>(
-    'https://user.auth.xboxlive.com/user/authenticate',
-    {
-      method: 'POST',
-      headers: XBOX_HEADERS,
-      body: JSON.stringify({
-        AuthMethod: 'www.authenticatexboxlive.com',
-        SiteName: 'USER',
-        RelyingParty: 'http://auth.xboxlive.com',
-        TokenType: 'JWT',
-        Properties: { AuthToken: accessToken },
-      }),
-    },
-  );
-  if (!xbl.Token) throw new Error('Xbox Live authentication failed');
+interface XboxErrorBody {
+  Token?: string;
+  DisplayClaims?: { xui?: Array<{ uhs?: string }> };
+  ErrorCode?: number;
+  XErr?: number;
+  Message?: string;
+  error?: string;
+  error_description?: string;
+  status?: number;
+}
 
-  const xsts = await fetchJson<{
-    Token: string;
-    DisplayClaims?: { xui?: Array<{ uhs?: string }> };
-    ErrorCode?: number;
-  }>(
-    'https://xsts.auth.xboxlive.com/xsts/authorize',
-    {
-      method: 'POST',
-      headers: XBOX_HEADERS,
-      body: JSON.stringify({
-        RelyingParty: 'rp://api.minecraftservices.com/',
-        TokenType: 'JWT',
-        Properties: { UserTokens: [xbl.Token], Sandbox: 'RETAIL' },
-      }),
+function xboxErrorDetail(body: XboxErrorBody): string {
+  const detail = body.Message ?? body.error_description ?? body.error ?? '';
+  const code = body.XErr ?? body.ErrorCode;
+  return [body.status ? `HTTP ${body.status}` : '', code !== undefined ? `XErr ${code}` : '', detail]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+async function authenticateXbox(accessToken: string, v1: boolean): Promise<{ token: string; uhs: string }> {
+  const raw = accessToken.replace(/^[td]=/, '');
+  const rpsBody = (ticket: string) => ({
+    Properties: {
+      AuthMethod: 'RPS',
+      SiteName: 'user.auth.xboxlive.com',
+      RpsTicket: ticket,
     },
-  );
+    RelyingParty: 'http://auth.xboxlive.com',
+    TokenType: 'JWT',
+  });
+  // Microsoft has used several ticket shapes over the years. Try the documented
+  // RPS form first, then the legacy AuthToken form, so either endpoint flavor works.
+  const tickets = v1 ? [`d=${raw}`, `t=${raw}`, raw] : [`d=${raw}`, raw, `t=${raw}`];
+  const variants: Array<{ label: string; body: unknown }> = tickets.map((ticket) => ({
+    label: `RPS ${ticket.slice(0, 2)}`,
+    body: rpsBody(ticket),
+  }));
+  variants.push({
+    label: 'legacy AuthToken',
+    body: {
+      AuthMethod: 'www.authenticatexboxlive.com',
+      SiteName: 'USER',
+      RelyingParty: 'http://auth.xboxlive.com',
+      TokenType: 'JWT',
+      Properties: { AuthToken: `t=${raw}` },
+    },
+  });
+
+  let xbl: XboxErrorBody | null = null;
+  const failures: string[] = [];
+  for (const variant of variants) {
+    const response = await postJson<XboxErrorBody>('https://user.auth.xboxlive.com/user/authenticate', variant.body);
+    if (response.Token) {
+      xbl = response;
+      break;
+    }
+    failures.push(`${variant.label}: ${xboxErrorDetail(response) || 'no token'}`);
+  }
+  if (!xbl?.Token) throw new Error(`Xbox Live authentication failed — ${failures.join(' | ')}`);
+
+  const xsts = await postJson<XboxErrorBody>('https://xsts.auth.xboxlive.com/xsts/authorize', {
+    RelyingParty: 'rp://api.minecraftservices.com/',
+    TokenType: 'JWT',
+    Properties: { UserTokens: [xbl.Token], SandboxId: 'RETAIL' },
+  });
   const uhs = xsts.DisplayClaims?.xui?.[0]?.uhs;
   if (!xsts.Token || !uhs) {
-    if (xsts.ErrorCode === 2148916233) throw new Error('This Microsoft account has no Xbox profile');
-    if (xsts.ErrorCode === 2148916238) throw new Error('This account belongs to a family and needs adult consent');
-    throw new Error('XSTS authorization failed');
+    const code = xsts.XErr ?? xsts.ErrorCode;
+    if (code === 2148916233) throw new Error('This Microsoft account has no Xbox profile');
+    if (code === 2148916238) throw new Error('This account belongs to a family and needs adult consent');
+    throw new Error(`XSTS authorization failed — ${xboxErrorDetail(xsts) || 'no token'}`);
   }
   return { token: xsts.Token, uhs };
 }
@@ -170,19 +288,36 @@ export async function fetchMinecraftProfile(accessToken: string): Promise<Minecr
 export function mergeMinecraftProfile(account: Account, profile: MinecraftProfile): Account {
   const activeSkin = profile.skins?.find((skin) => skin.state === 'ACTIVE') ?? profile.skins?.[0];
   const skinModel: SkinModel = activeSkin?.variant?.toUpperCase() === 'SLIM' ? 'alex' : 'steve';
+  const activeCape = profile.capes?.find((cape) => cape.state === 'ACTIVE');
+  const officialCape: CapeSelection = activeCape
+    ? {
+        type: 'official',
+        id: activeCape.id,
+        url: activeCape.url,
+        name: activeCape.alias || activeCape.id,
+      }
+    : { type: 'none' };
   return {
     ...account,
     name: profile.name || account.name,
     uuid: profile.id || account.uuid,
     skinModel,
     skinTexture: activeSkin?.url ?? account.skinTexture,
-    capeTexture: profile.capes?.[0]?.url ?? account.capeTexture,
+    capes: profile.capes ?? account.capes ?? [],
+    // A locally chosen custom cape stays authoritative across profile refreshes.
+    cape: account.cape?.type === 'custom' ? account.cape : officialCape,
     lastUsed: Date.now(),
   };
 }
 
-async function buildMicrosoftAccount(accessToken: string, refreshToken?: string, clientId?: string): Promise<Account> {
-  const { token, uhs } = await authenticateXbox(accessToken);
+async function buildMicrosoftAccount(
+  accessToken: string,
+  refreshToken?: string,
+  clientId?: string,
+  v1 = true,
+  email?: string,
+): Promise<Account> {
+  const { token, uhs } = await authenticateXbox(accessToken, v1);
   const minecraft = await fetchJson<{ access_token: string }>(
     'https://api.minecraftservices.com/authentication/login_with_xbox',
     {
@@ -208,6 +343,7 @@ async function buildMicrosoftAccount(accessToken: string, refreshToken?: string,
     accessToken: minecraft.access_token,
     refreshToken,
     clientId,
+    email,
     expiresAt: Date.now() + 1000 * 60 * 60 * 20,
     lastUsed: Date.now(),
   };
@@ -242,46 +378,59 @@ export async function pollMicrosoftLogin(sessionId: string): Promise<Account | {
   }
   if (!response.access_token) throw new Error(response.error_description ?? 'Microsoft sign-in failed');
   sessions.delete(sessionId);
-  return buildMicrosoftAccount(response.access_token, response.refresh_token, session.clientId);
+  return buildMicrosoftAccount(
+    response.access_token,
+    response.refresh_token,
+    session.clientId,
+    session.v1,
+    emailFromIdToken(response.id_token),
+  );
 }
 
 export async function refreshAccount(account: Account): Promise<Account> {
   if (account.type !== 'microsoft' || !account.refreshToken) return account;
+  const clientId = account.clientId?.trim() || MICROSOFT_CLIENT_ID;
   const session: DeviceSession = {
     deviceCode: '',
-    clientId: '',
+    clientId,
+    v1: isLegacyClientId(clientId),
     interval: 5,
     expiresAt: Date.now() + 60_000,
     lastPoll: 0,
   };
-  session.clientId = account.clientId ?? '';
-  if (!session.clientId) return account;
   try {
-    const response = await fetchJson<MsTokenResponse>(
-      'https://login.microsoftonline.com/consumers/oauth2/v2.0/token',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: session.clientId,
-          scope: 'XboxLive.signin offline_access openid profile email',
-          grant_type: 'refresh_token',
-          refresh_token: account.refreshToken,
-        }).toString(),
-      },
-    );
-    if (!response.access_token) return account;
+    const response = await postForm<MsTokenResponse>(tokenEndpoint(session.v1), {
+      client_id: session.clientId,
+      scope: session.v1 ? V1_SCOPE : V2_SCOPE,
+      grant_type: 'refresh_token',
+      refresh_token: account.refreshToken,
+    });
+    if (response.error || !response.access_token) {
+      if (response.error) console.warn('[Auth] Refresh failed:', response.error, response.error_description ?? '');
+      return account;
+    }
     const refreshed = await buildMicrosoftAccount(
       response.access_token,
       response.refresh_token ?? account.refreshToken,
-      account.clientId,
+      clientId,
+      session.v1,
+      emailFromIdToken(response.id_token) ?? account.email,
     );
-    return {
+    const persisted: Account = {
       ...refreshed,
       id: account.id,
-      clientId: account.clientId,
+      clientId,
       skinHash: account.skinHash,
+      cape: account.cape,
     };
+    try {
+      // Dynamic import avoids a static cycle: store.ts uses inferSkinModel().
+      const { store } = await import('./store');
+      await store.upsertAccount(persisted);
+    } catch (error) {
+      console.warn('[Auth] Could not persist refreshed session:', error);
+    }
+    return persisted;
   } catch (error) {
     console.error('[Auth] Refresh failed:', error);
     return account;
@@ -298,22 +447,5 @@ export async function getLaunchAccount(account: Account): Promise<Account> {
 }
 
 export function inferSkinModel(buffer: Buffer): SkinModel {
-  try {
-    const { PNG } = require('pngjs') as typeof import('pngjs');
-    const png = PNG.sync.read(buffer);
-    // Slim arms are marked by a transparent pixel at (54, 20) on a 64x64 skin.
-    // HD skins use the same layout scaled by 2, so map the coordinate before
-    // reading it. 64x32 predates slim arms and is always classic.
-    const scaleX = png.width / 64;
-    const scaleY = png.height / 64;
-    if (!Number.isInteger(scaleX) || !Number.isInteger(scaleY) || png.height < 64) return 'steve';
-    const x = Math.min(png.width - 1, Math.floor(54 * scaleX));
-    const y = Math.min(png.height - 1, Math.floor(20 * scaleY));
-    const alpha = png.data[(y * png.width + x) * 4 + 3];
-    // PNG alpha can be 1 instead of exactly 0 after re-encoding, so use a
-    // threshold rather than a strict zero comparison.
-    return alpha < 128 ? 'alex' : 'steve';
-  } catch {
-    return 'steve';
-  }
+  return inferSkinModelLocal(buffer);
 }

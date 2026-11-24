@@ -1,11 +1,41 @@
-import { BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron';
+import * as os from 'os';
 import * as path from 'path';
 import {
   beginMicrosoftLogin,
   createOfflineAccount,
   pollMicrosoftLogin,
 } from './auth';
+
+import {
+  applyCustomCape,
+  applyOfficialCape,
+  clearCape,
+  grantFreeCape,
+  importCape,
+  importCapeFromData,
+  refreshOfficialCapes,
+  removeCape,
+} from './capes';
+import { syncAllCustomSkinLoaders } from './customSkinLoader';
 import { events } from './events';
+import {
+  acceptCall,
+  addFriendByCode,
+  addFriendFromParty,
+  callFriend,
+  endCall,
+  friendMessages,
+  listFriendPeers,
+  listFriends,
+  myFriendCode,
+  rejectCall,
+  removeFriend,
+  renameFriend,
+  sendFriendMessage,
+  voiceSend,
+} from './friends';
+import { loginEmail, signupEmail } from './foxId';
 import {
   cloneInstance,
   createInstance,
@@ -23,6 +53,7 @@ import {
   launchLogs,
   launchState,
   listVersions,
+  restoreLaunchSnapshot,
   stopGame,
 } from './minecraft';
 import {
@@ -41,13 +72,36 @@ import {
 } from './mods';
 import { getNews } from './news';
 import { addOfflinePlayer, listOfflinePlayers, removeOfflinePlayer } from './offlineSkinDirectory';
+import {
+  createParty,
+  currentParty,
+  joinByAddress,
+  joinParty,
+  leaveParty,
+  partyChatPresence,
+  partyChatSend,
+  partyChatStatus,
+  selectPartyInstance,
+  serverStatus,
+  setPartyRemoteAddress,
+} from './party';
+import { stopPartyServer } from './partyServer';
 import { applyPerformanceSettings, getPerformanceSettings, installFpsMods } from './performance';
 import { getUpdateInstallStatus, startUpdate } from './selfUpdate';
 import { store } from './store';
-import { applySkin, importSkin, importSkinFromData, removeSkin, uploadSkinForAccount } from './skins';
+import { applySkin, importSkin, importSkinFromData, removeSkin, setSkinModel, uploadSkinForAccount } from './skins';
 import { record as recordTelemetry, clearDiagnostics, getDiagnostics } from './telemetry';
 import { checkForUpdates, getLastUpdateCheck } from './updates';
-import type { Account, ContentType, Instance, Settings, SkinModel } from '../shared/types';
+import type {
+  Account,
+  ContentType,
+  Instance,
+  PartyJoin,
+  PartyMember,
+  PartyPresence,
+  Settings,
+  SkinModel,
+} from '../shared/types';
 
 export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.on('app:minimize', () => getWindow()?.minimize());
@@ -65,6 +119,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('app:openExternal', async (_event, url: string) => {
     if (!/^https?:\/\//i.test(url)) throw new Error('Only http(s) links can be opened');
     await shell.openExternal(url);
+  });
+  ipcMain.handle('app:copyText', (_event, text: string) => {
+    if (typeof text !== 'string') throw new Error('Nothing to copy');
+    clipboard.writeText(text);
   });
   ipcMain.handle('app:showItem', (_event, filePath: string) => shell.showItemInFolder(filePath));
   ipcMain.handle('app:openFolder', async (_event, folder: string) => {
@@ -96,6 +154,12 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   });
   ipcMain.handle('app:diagnostics', () => getDiagnostics());
   ipcMain.handle('app:clearDiagnostics', () => clearDiagnostics());
+  ipcMain.handle('app:systemInfo', () => ({
+    totalMemoryMb: Math.round(os.totalmem() / 1024 / 1024),
+    platform: process.platform,
+    arch: process.arch,
+    cpuCount: os.cpus().length,
+  }));
 
   ipcMain.handle('settings:get', () => store.get().settings);
   ipcMain.handle('settings:update', (_event, patch: Partial<Settings>) => store.updateSettings(patch));
@@ -121,11 +185,23 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('accounts:offline', async (_event, name: string) => {
     const account = createOfflineAccount(name);
     await store.upsertAccount(account);
+    await grantFreeCape(account.id);
     await selectAccount(account.id);
     events.toast('success', `Offline account ${account.name} created`);
     return account;
   });
-  ipcMain.handle('accounts:msaBegin', (_event, clientId: string) => beginMicrosoftLogin(clientId));
+  ipcMain.handle('accounts:signupEmail', async (_event, name: string, email: string, password: string) => {
+    const account = await signupEmail(name, email, password);
+    await grantFreeCape(account.id);
+    await selectAccount(account.id);
+    return account;
+  });
+  ipcMain.handle('accounts:loginEmail', async (_event, email: string, password: string) => {
+    const account = await loginEmail(email, password);
+    await selectAccount(account.id);
+    return account;
+  });
+  ipcMain.handle('accounts:msaBegin', () => beginMicrosoftLogin());
   ipcMain.handle('accounts:msaPoll', async (_event, sessionId: string) => {
     const result = await pollMicrosoftLogin(sessionId);
     if ('pending' in result) return result;
@@ -143,10 +219,63 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return result;
   });
 
-  ipcMain.handle('launcher:launch', (_event, instanceId: string) => launchInstance(instanceId));
+  ipcMain.handle('launcher:launch', (_event, instanceId: string, join?: PartyJoin) =>
+    launchInstance(instanceId, join ? { join } : undefined));
   ipcMain.handle('launcher:stop', () => stopGame());
   ipcMain.handle('launcher:state', () => launchState());
   ipcMain.handle('launcher:logs', () => launchLogs());
+  ipcMain.handle('launcher:snapshot', (_event, instanceId: string) => store.getLaunchSnapshot(instanceId));
+  ipcMain.handle('launcher:restoreSnapshot', (_event, instanceId: string) => restoreLaunchSnapshot(instanceId));
+
+  ipcMain.handle('party:current', () => currentParty());
+  ipcMain.handle('party:create', (_event, input) => createParty(input));
+  ipcMain.handle('party:join', (_event, inviteCode: string, preferredInstanceId?: string) =>
+    joinParty(inviteCode, preferredInstanceId));
+  ipcMain.handle('party:joinByAddress', (_event, address: string, preferredInstanceId?: string) =>
+    joinByAddress(address, preferredInstanceId));
+  ipcMain.handle('party:setRemoteAddress', (_event, address: string, chatPort?: number) =>
+    setPartyRemoteAddress(address, chatPort));
+  ipcMain.handle('party:selectInstance', (_event, instanceId: string) => selectPartyInstance(instanceId));
+  ipcMain.handle('party:leave', () => leaveParty());
+  ipcMain.handle('party:serverStatus', () => ({ party: currentParty(), server: serverStatus() }));
+  ipcMain.handle('party:serverStop', async () => {
+    await stopPartyServer();
+    const party = currentParty();
+    if (party?.server) {
+      await store.setParty({
+        ...party,
+        chat: { status: 'offline', message: 'Party chat stopped.' },
+        server: { status: 'offline', message: 'Party server stopped.', log: [] },
+      });
+    }
+    return currentParty();
+  });
+  ipcMain.handle('party:chatStatus', () => partyChatStatus());
+  ipcMain.handle('party:chatSend', (_event, text: string) => {
+    partyChatSend(text);
+  });
+  ipcMain.handle('party:chatPresence', (_event, presence: PartyPresence) => {
+    partyChatPresence(presence);
+  });
+
+  ipcMain.handle('friends:list', () => listFriends());
+  ipcMain.handle('friends:myCode', () => myFriendCode());
+  ipcMain.handle('friends:peers', () => listFriendPeers());
+  ipcMain.handle('friends:addCode', (_event, code: string) => addFriendByCode(code));
+  ipcMain.handle('friends:addPartyMember', (_event, member: PartyMember) => addFriendFromParty(member));
+  ipcMain.handle('friends:remove', (_event, id: string) => removeFriend(id));
+  ipcMain.handle('friends:rename', (_event, id: string, name: string) => renameFriend(id, name));
+  ipcMain.handle('friends:messages', (_event, friendCode: string) => friendMessages(friendCode));
+  ipcMain.handle('friends:sendMessage', (_event, friendCode: string, text: string) =>
+    sendFriendMessage(friendCode, text));
+  ipcMain.handle('friends:callStart', (_event, friendCode: string) => callFriend(friendCode));
+  ipcMain.handle('friends:callAccept', (_event, friendCode: string, callId: string) =>
+    acceptCall(friendCode, callId));
+  ipcMain.handle('friends:callReject', (_event, friendCode: string, callId: string) =>
+    rejectCall(friendCode, callId));
+  ipcMain.handle('friends:callEnd', (_event, friendCode: string) => endCall(friendCode));
+  ipcMain.handle('friends:voiceSend', (_event, friendCode: string, pcm: string, callId: string) =>
+    voiceSend(friendCode, pcm, callId));
 
   ipcMain.handle('mods:search', (_event, query, loader, mcVersion, category, source) =>
     searchMods(query, loader, mcVersion, category, source));
@@ -186,13 +315,40 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('skins:remove', (_event, hash: string) => removeSkin(hash));
   ipcMain.handle('skins:select', async (_event, hash: string, accountId: string, model?: SkinModel) =>
     applySkin(accountId, hash, model));
+  ipcMain.handle('skins:setModel', (_event, hash: string, model: SkinModel) => setSkinModel(hash, model));
   ipcMain.handle('skins:offlineList', () => listOfflinePlayers());
-  ipcMain.handle('skins:offlineAdd', async (_event, name: string, hash?: string) => {
-    const entry = await addOfflinePlayer(name, hash);
+  ipcMain.handle('skins:offlineAdd', async (_event, name: string, hash?: string, model?: SkinModel) => {
+    const entry = await addOfflinePlayer(name, hash, model);
     events.toast('success', `Offline server skin ready for ${entry.name}`);
     return entry;
   });
   ipcMain.handle('skins:offlineRemove', async (_event, name: string) => removeOfflinePlayer(name));
+
+  ipcMain.handle('capes:list', () => store.get().capes);
+  ipcMain.handle('capes:import', () => importCape());
+  ipcMain.handle('capes:importData', (_event, name: string, dataUrl: string) =>
+    importCapeFromData(name, dataUrl));
+  ipcMain.handle('capes:remove', async (_event, hash: string) => {
+    const capes = await removeCape(hash);
+    await syncCapeMods();
+    return capes;
+  });
+  ipcMain.handle('capes:refreshOfficial', (_event, accountId: string) => refreshOfficialCapes(accountId));
+  ipcMain.handle('capes:applyOfficial', async (_event, accountId: string, capeId: string) => {
+    const account = await applyOfficialCape(accountId, capeId);
+    await syncCapeMods();
+    return account;
+  });
+  ipcMain.handle('capes:applyCustom', async (_event, accountId: string, hash: string) => {
+    const result = await applyCustomCape(accountId, hash);
+    await syncCapeMods();
+    return result;
+  });
+  ipcMain.handle('capes:clear', async (_event, accountId: string) => {
+    const account = await clearCape(accountId);
+    await syncCapeMods();
+    return account;
+  });
 
   ipcMain.handle('news:get', () => getNews());
   ipcMain.handle('performance:get', (_event, instanceId: string) => getPerformanceSettings(instanceId));
@@ -201,6 +357,14 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('performance:installFpsMods', (_event, instanceId: string) => installFpsMods(instanceId));
   ipcMain.handle('java:detect', () => detectJava());
   ipcMain.handle('java:validate', (_event, javaPath: string) => validateJava(javaPath));
+}
+
+async function syncCapeMods(): Promise<void> {
+  try {
+    await syncAllCustomSkinLoaders();
+  } catch (error) {
+    console.warn('[Capes] CustomSkinLoader sync failed:', error);
+  }
 }
 
 async function selectAccount(id: string): Promise<Account[]> {

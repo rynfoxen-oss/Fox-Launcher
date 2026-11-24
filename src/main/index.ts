@@ -1,8 +1,12 @@
-import { app, BrowserWindow, dialog, Menu, nativeImage, Tray } from 'electron';
+import { app, BrowserWindow, dialog, Menu, nativeImage, session, Tray } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
+import { stopBackgroundWorkers } from './background';
+import { ensureFreeCape, grantFreeCapeToOfflineAccounts } from './capes';
 import { events } from './events';
 import { registerIpc } from './ipc';
+import { startDiscovery, stopDiscovery } from './lanDiscovery';
+import { stopPartyServer } from './partyServer';
 import { store } from './store';
 import { record as recordTelemetry } from './telemetry';
 import { checkForUpdates } from './updates';
@@ -46,7 +50,8 @@ function applyMacRenderOptimizations(): void {
   if (process.platform !== 'darwin') return;
   app.commandLine.appendSwitch('enable-gpu-rasterization');
   app.commandLine.appendSwitch('enable-zero-copy');
-  app.commandLine.appendSwitch('ignore-gpu-blocklist');
+  // Do not bypass Chromium's GPU blocklist; forcing unsupported drivers causes
+  // crashes/artifacts on some Macs instead of smoother rendering.
 }
 
 function createTray(): void {
@@ -123,8 +128,19 @@ async function bootstrap(): Promise<void> {
 
   await app.whenReady();
   await store.init();
+  try {
+    await ensureFreeCape();
+    await grantFreeCapeToOfflineAccounts();
+  } catch (error) {
+    console.warn('[Capes] Bundled free cape setup failed:', error);
+  }
   events.hydrateDownloads(store.get().downloadHistory);
+  // Voice calls are local-only; grant mic permission without a browser popup.
+  session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => {
+    callback(permission === 'media');
+  });
   registerIpc(() => mainWindow);
+  startDiscovery();
   createWindow();
   recordTelemetry('app_start');
   if (store.get().settings.checkUpdates) {
@@ -135,6 +151,13 @@ async function bootstrap(): Promise<void> {
       });
     }, 2500);
   }
+
+  app.on('before-quit', () => {
+    quitting = true;
+    void stopPartyServer();
+    stopDiscovery();
+    stopBackgroundWorkers();
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

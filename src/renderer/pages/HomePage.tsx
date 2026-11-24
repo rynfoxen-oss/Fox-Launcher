@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import {
   ArrowUpRight,
   Boxes,
@@ -12,13 +12,16 @@ import {
   Play,
   Plus,
   Rocket,
+  RotateCcw,
   Server,
-  Settings2,
   Shirt,
+  Settings2,
   Square,
   UserRound,
+  X,
 } from 'lucide-react';
-import { useApp } from '../store';
+import type { LaunchSnapshot } from '../../shared/types';
+import { selectedCapeUrl, useApp } from '../store';
 import { boostInstance } from '../boost';
 import { useT } from '../i18n';
 import { launch } from '../components/InstanceCard';
@@ -31,22 +34,21 @@ import { Button, EmptyState, Spinner } from '../components/Common';
 import { downloadDetail, downloadPercent, formatBytes } from '../format';
 
 export function HomePage() {
-  const {
-    instances,
-    selectedInstanceId,
-    currentAccount,
-    news,
-    settings,
-    updateSettings,
-    launchState,
-    navigate,
-    logsOpen,
-    setLogsOpen,
-    downloads,
-    toast,
-    setBusy,
-    refreshInstances,
-  } = useApp();
+  const instances = useApp((state) => state.instances);
+  const selectedInstanceId = useApp((state) => state.selectedInstanceId);
+  const currentAccount = useApp((state) => state.currentAccount);
+  const capes = useApp((state) => state.capes);
+  const news = useApp((state) => state.news);
+  const settings = useApp((state) => state.settings);
+  const updateSettings = useApp((state) => state.updateSettings);
+  const launchState = useApp((state) => state.launchState);
+  const navigate = useApp((state) => state.navigate);
+  const logsOpen = useApp((state) => state.logsOpen);
+  const setLogsOpen = useApp((state) => state.setLogsOpen);
+  const downloads = useApp((state) => state.downloads);
+  const toast = useApp((state) => state.toast);
+  const setBusy = useApp((state) => state.setBusy);
+  const refreshInstances = useApp((state) => state.refreshInstances);
   const t = useT();
   const [accountModal, setAccountModal] = useState(false);
   const [createModal, setCreateModal] = useState(false);
@@ -57,6 +59,34 @@ export function HomePage() {
   const showLogs = logsOpen;
   const setShowLogs = setLogsOpen;
   const logs = useApp((state) => state.logs);
+  const [recovery, setRecovery] = useState<LaunchSnapshot | null>(null);
+  const [recoveryStatus, setRecoveryStatus] = useState('');
+
+  useEffect(() => {
+    const instanceId = launchState.status === 'crashed' ? launchState.instanceId : undefined;
+    if (!instanceId) {
+      setRecovery(null);
+      setRecoveryStatus('');
+      return;
+    }
+    let active = true;
+    window.fox.launcher.getSnapshot(instanceId)
+      .then((snapshot) => { if (active) { setRecovery(snapshot); setRecoveryStatus(''); } })
+      .catch(() => { if (active) setRecovery(null); });
+    return () => { active = false; };
+  }, [launchState.status, launchState.instanceId]);
+
+  async function restoreRecovery() {
+    if (!recovery) return;
+    setRecoveryStatus('Restoring last working setup…');
+    try {
+      await window.fox.launcher.restoreSnapshot(recovery.instanceId);
+      await refreshInstances();
+      setRecoveryStatus('Last working graphics and Java settings restored.');
+    } catch (error) {
+      setRecoveryStatus(`Restore failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
 
   const byteItems = downloads.filter((item) => (item.bytesTotal ?? 0) > 0);
   const aggregateBytes = byteItems.reduce((sum, item) => sum + (item.bytes ?? 0), 0);
@@ -230,10 +260,12 @@ export function HomePage() {
         <div className="hero-player">
           <SkinPreview
             skinUrl={currentAccount?.skinTexture}
-            capeUrl={currentAccount?.capeTexture}
+            capeUrl={selectedCapeUrl(currentAccount, capes)}
             model={currentAccount?.skinModel}
             width={220}
             height={320}
+            initialZoom={0.82}
+            className="home-player-preview"
           />
         </div>
       </section>
@@ -312,6 +344,29 @@ export function HomePage() {
           )}
         </section>
       </div>
+
+      {recovery && (
+        <div className="recovery-banner" role="status" aria-live="polite">
+          <span className="recovery-icon"><RotateCcw size={16} /></span>
+          <div className="recovery-copy">
+            <strong>Last working setup available</strong>
+            <span>
+              {instances.find((item) => item.id === recovery.instanceId)?.name ?? 'This instance'} crashed.
+              Restore the graphics and Java settings saved after its last clean exit
+              {' '}({new Date(recovery.savedAt).toLocaleString()}).
+            </span>
+            {recoveryStatus && <small>{recoveryStatus}</small>}
+          </div>
+          <div className="recovery-actions">
+            <button className="btn btn-sm" disabled={recoveryStatus === 'Restoring last working setup…'} onClick={() => void restoreRecovery()}>
+              Restore
+            </button>
+            <button className="icon-btn" title="Dismiss" aria-label="Dismiss recovery offer" onClick={() => { setRecovery(null); setRecoveryStatus(''); }}>
+              <X size={13} />
+            </button>
+          </div>
+        </div>
+      )}
 
       <section className="panel console-panel">
         <div className="panel-header">

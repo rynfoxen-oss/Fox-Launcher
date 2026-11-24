@@ -5,8 +5,11 @@ import type { AddressInfo } from 'net';
 import * as path from 'path';
 import { app } from 'electron';
 import { PNG } from 'pngjs';
-import { inferSkinModel, offlineUuid } from './auth';
+import { offlineUuid } from './auth';
+import { capeBufferForAccount } from './capes';
+
 import { events } from './events';
+import { normalizeTexture } from './skinImage';
 import { store } from './store';
 import { ensureDir, downloadFile, fetchJson, fileExists, sha256 } from './utils';
 import type { Account, SkinModel } from '../shared/types';
@@ -19,6 +22,7 @@ interface ProfileRecord {
   textureHash: string;
   model: SkinModel;
   accessToken: string;
+  capeTextureKey?: string;
 }
 
 interface JoinRecord {
@@ -128,12 +132,33 @@ function refreshMetadata(): void {
   metadataBase64 = Buffer.from(JSON.stringify(metadata), 'utf8').toString('base64');
 }
 
-function sanitizeSkin(buffer: Buffer): Buffer {
-  const png = PNG.sync.read(buffer);
-  const valid = (png.width === 64 && (png.height === 32 || png.height === 64))
-    || (png.width === 128 && (png.height === 64 || png.height === 128));
-  if (!valid) throw new Error('Skin PNG must be 64x32, 64x64, 128x64 or 128x128');
-  return PNG.sync.write(png);
+/**
+ * Accepts either a base URL (https://skin.example.com) or a full Yggdrasil
+ * endpoint (https://skin.example.com/api/yggdrasil/) and returns a normalized
+ * endpoint with a trailing slash, as required by authlib-injector.
+ */
+export function normalizeSharedSkinApi(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = new URL(trimmed);
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('Shared skin API URL must start with http:// or https://');
+  }
+  const path = parsed.pathname.replace(/\/+$/, '');
+  const yggdrasilPath = path.endsWith('/api/yggdrasil') ? path : `${path}/api/yggdrasil`;
+  return `${parsed.origin}${yggdrasilPath}/`;
+}
+
+/** authlib-injector's prefetched value is the base64-encoded metadata JSON. */
+async function sharedApiPrefetched(apiRoot: string): Promise<string> {
+  const response = await fetch(apiRoot, {
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) throw new Error(`Shared skin API returned ${response.status}`);
+  const metadata = await response.text();
+  JSON.parse(metadata); // Reject HTML/login pages that answer with HTTP 200.
+  return Buffer.from(metadata, 'utf8').toString('base64');
 }
 
 function normalizeUuid(value?: string): string {
@@ -150,20 +175,25 @@ function decodeDataUrl(value?: string): Buffer | null {
 }
 
 async function textureForAccount(account: Account): Promise<Buffer | null> {
+  let buffer: Buffer | null = null;
   if (account.skinHash) {
     const file = path.join(app.getPath('userData'), 'skins', `${account.skinHash}.png`);
-    const fromFile = await fs.readFile(file).catch(() => null);
-    if (fromFile) return fromFile;
+    buffer = await fs.readFile(file).catch(() => null);
   }
-  return decodeDataUrl(account.skinTexture);
+  buffer ??= decodeDataUrl(account.skinTexture);
+  if (!buffer) return null;
+  const normalized = await normalizeTexture(buffer, 'skin').catch(() => null);
+  return normalized?.buffer ?? null;
 }
 
 async function textureForHash(hash: string): Promise<Buffer | null> {
   const file = path.join(app.getPath('userData'), 'skins', `${hash}.png`);
   const fromFile = await fs.readFile(file).catch(() => null);
-  if (fromFile) return fromFile;
   const skin = store.get().skins.find((item) => item.hash === hash);
-  return decodeDataUrl(skin?.dataUrl);
+  const buffer = fromFile ?? decodeDataUrl(skin?.dataUrl);
+  if (!buffer) return null;
+  const normalized = await normalizeTexture(buffer, 'skin').catch(() => null);
+  return normalized?.buffer ?? null;
 }
 
 /** Offline UUIDs depend on the exact capitalization used by the client. */
@@ -177,19 +207,26 @@ function registerProfile(
   identity: { uuid: string; name: string; accessToken: string },
   buffer: Buffer,
   modelOverride?: SkinModel,
+  capeBuffer?: Buffer | null,
 ): ProfileRecord | null {
   try {
-    const texture = sanitizeSkin(buffer);
+    const texture = buffer;
     const uuid = normalizeUuid(identity.uuid) || normalizeUuid(offlineUuid(identity.name));
     const existing = profiles.get(uuid);
     if (existing) return existing;
 
+    let capeTextureKey: string | undefined;
+    if (capeBuffer?.length) {
+      capeTextureKey = `cape-${sha256(capeBuffer)}`;
+      textures.set(capeTextureKey, capeBuffer);
+    }
     const profile: ProfileRecord = {
       uuid,
       name: identity.name,
       textureHash: sha256(texture),
-      model: modelOverride ?? inferSkinModel(texture),
+      model: modelOverride ?? 'steve',
       accessToken: identity.accessToken,
+      capeTextureKey,
     };
     profiles.set(uuid, profile);
     profiles.set(`${uuid.slice(0, 8)}-${uuid.slice(8, 12)}-${uuid.slice(12, 16)}-${uuid.slice(16, 20)}-${uuid.slice(20)}`, profile);
@@ -230,6 +267,9 @@ function signedTextures(profile: ProfileRecord): string {
         url: `${apiRoot}textures/${profile.textureHash}`,
         metadata: { model: profile.model === 'alex' ? 'slim' : 'default' },
       },
+      ...(profile.capeTextureKey
+        ? { CAPE: { url: `${apiRoot}textures/${profile.capeTextureKey}` } }
+        : {}),
     },
   };
   return Buffer.from(JSON.stringify(texturesPayload), 'utf8').toString('base64');
@@ -453,6 +493,22 @@ async function startServer(): Promise<void> {
 export async function prepareOfflineSkinSession(account: Account): Promise<SkinInjection | null> {
   if (account.type !== 'offline') return null;
 
+  // A shared Yggdrasil API replaces the local one: every client pointed at it
+  // resolves the same capes, which is the only way other players can see a
+  // custom cape on an offline-mode server.
+  const sharedRoot = normalizeSharedSkinApi(store.get().settings.sharedSkinApiUrl ?? '');
+  if (sharedRoot) {
+    const jarPath = await ensureInjectorJar();
+    if (!jarPath) return null;
+    const prefetched = await sharedApiPrefetched(sharedRoot);
+    events.log({
+      time: Date.now(),
+      level: 'info',
+      text: `[Skins] Using shared skin API ${sharedRoot}`,
+    });
+    return { jarPath, apiRoot: sharedRoot, prefetched };
+  }
+
   profiles.clear();
   textures.clear();
   joins.clear();
@@ -463,14 +519,21 @@ export async function prepareOfflineSkinSession(account: Account): Promise<SkinI
   for (const candidate of candidates) {
     const texture = await textureForAccount(candidate);
     if (!texture) continue;
-    const profile = registerProfile(candidate, texture, candidate.skinModel);
+    // Custom capes are local-only; an official cape stays on Mojang's profile.
+    const cape = await capeBufferForAccount(candidate);
+    const profile = registerProfile(candidate, texture, candidate.skinModel, cape);
     if (!profile) continue;
     // Offline servers derive UUIDs from the exact name. Register those UUIDs for
     // every saved account so those names resolve while an offline account plays.
     for (const variant of nameVariants(candidate.name)) {
       const uuid = offlineUuid(variant).replace(/-/g, '');
       if (uuid === profile.uuid) continue;
-      registerProfile({ uuid, name: variant, accessToken: candidate.accessToken }, texture, candidate.skinModel);
+      registerProfile(
+        { uuid, name: variant, accessToken: candidate.accessToken },
+        texture,
+        candidate.skinModel,
+        cape,
+      );
     }
   }
 
@@ -497,8 +560,13 @@ export async function prepareOfflineSkinSession(account: Account): Promise<SkinI
   }
 
   // A saved skin named after a player is a fallback for offline-mode servers.
+  const fallbackTextures = new Map<string, Buffer>();
   for (const skin of data.skins) {
-    const texture = decodeDataUrl(skin.dataUrl);
+    let texture = fallbackTextures.get(skin.hash);
+    if (!texture) {
+      texture = (await textureForHash(skin.hash)) ?? undefined;
+      if (texture) fallbackTextures.set(skin.hash, texture);
+    }
     if (!texture) continue;
     const nameMatch = data.accounts.find(
       (item) => item.type === 'offline' && item.name.toLowerCase() === skin.name.toLowerCase(),

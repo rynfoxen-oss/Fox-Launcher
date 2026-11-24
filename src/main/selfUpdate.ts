@@ -171,6 +171,9 @@ async function installWindows(installer: string): Promise<void> {
 }
 
 async function installMac(archive: string, updateDir: string): Promise<void> {
+  if (!/\.zip$/i.test(archive)) {
+    throw new Error('This macOS update is not a ZIP app bundle. Download it manually from the release page.');
+  }
   const executable = app.getPath('exe');
   const marker = `${path.sep}Contents${path.sep}MacOS${path.sep}`;
   const markerIndex = executable.indexOf(marker);
@@ -224,7 +227,9 @@ async function installMac(archive: string, updateDir: string): Promise<void> {
 
 function removeQuarantine(bundlePath: string): Promise<void> {
   return new Promise((resolve) => {
-    const child = spawn('xattr', ['-cr', bundlePath], { stdio: 'ignore' });
+    // Remove only the download quarantine flag. A blanket -c also strips
+    // notarization metadata from signed builds.
+    const child = spawn('xattr', ['-d', '-r', 'com.apple.quarantine', bundlePath], { stdio: 'ignore' });
     child.once('close', () => resolve());
     child.once('error', () => resolve());
   });

@@ -50,7 +50,7 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
   appearance: `Themes recolor the whole window. Preview motion, colors and ${BACKGROUNDS.length} animated wallpapers — everything saves automatically.`,
   general: 'Language, startup behavior, Java defaults and update checks.',
   performance: 'Default memory, resolution, Java executable and download speed.',
-  accounts: 'Offline profiles and the launcher update feed.',
+  accounts: 'Offline profiles, shared skin API and the launcher update feed.',
   about: 'Version details, updates and local diagnostics.',
 };
 
@@ -75,6 +75,7 @@ const SETTING_LABELS: Record<string, string> = {
   downloadThreads: 'Download threads',
   jvmArgs: 'JVM arguments',
   updateFeedUrl: 'Update feed',
+  sharedSkinApiUrl: 'Shared skin API',
   lastInstanceId: 'Last instance',
 };
 
@@ -97,7 +98,13 @@ function changedPatch<T extends object>(original: T, draft: T): Partial<T> {
 }
 
 export function SettingsPage() {
-  const { settings, updateSettings, resetSettings, checkForUpdate, updateAvailable, updateInstall, installUpdate } = useApp();
+  const settings = useApp((state) => state.settings);
+  const updateSettings = useApp((state) => state.updateSettings);
+  const resetSettings = useApp((state) => state.resetSettings);
+  const checkForUpdate = useApp((state) => state.checkForUpdate);
+  const updateAvailable = useApp((state) => state.updateAvailable);
+  const updateInstall = useApp((state) => state.updateInstall);
+  const installUpdate = useApp((state) => state.installUpdate);
   const t = useT();
   const [draft, setDraft] = useState<Settings>(settings);
   // Kept in sync synchronously so rapid clicks in one tick never overwrite each other.
@@ -712,6 +719,18 @@ export function SettingsPage() {
               <div className="form-row spaced">
                 <Button variant="secondary" icon={<Users size={16} />} onClick={() => setAccountModal(true)}>Manage profiles</Button>
               </div>
+              <h2 className="section-spaced">Shared skin API</h2>
+              <Field
+                label="authlib-injector / Yggdrasil URL"
+                hint="Optional. Leave empty to use Fox Launcher's local skin server. Set your shared server URL so every client resolves the same skins and capes — this is required for other players to see your custom cape on an offline-mode server. Upload the cape PNG to that server as well."
+              >
+                <input
+                  value={draft.sharedSkinApiUrl ?? ''}
+                  onChange={(event) => patch({ sharedSkinApiUrl: event.target.value })}
+                  placeholder="https://skin.example.com/api/yggdrasil/"
+                  spellCheck={false}
+                />
+              </Field>
               <h2 className="section-spaced">Updates</h2>
               <Field label={t('updateFeed')} hint="Uses the official Fox Launcher repository by default. Startup checks are controlled in General.">
                 <input value={draft.updateFeedUrl ?? ''} onChange={(event) => patch({ updateFeedUrl: event.target.value })} placeholder="https://github.com/rynfoxen-oss/Fox-Launcher" />

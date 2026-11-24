@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import type {
   Account,
+  CapeEntry,
+  CapeSelection,
   DownloadProgress,
   Instance,
   LaunchLogLine,
@@ -13,7 +15,7 @@ import type {
   UpdateCheckResult,
 } from '../shared/types';
 
-export type Page = 'home' | 'instances' | 'instance' | 'mods' | 'skins' | 'performance' | 'settings';
+export type Page = 'home' | 'instances' | 'instance' | 'mods' | 'party' | 'friends' | 'skins' | 'performance' | 'settings';
 
 export type ToastCategory = 'general' | 'launch' | 'downloads' | 'updates' | 'errors';
 
@@ -26,6 +28,7 @@ interface AppState {
   accounts: Account[];
   currentAccount: Account | null;
   skins: SkinEntry[];
+  capes: CapeEntry[];
   offlineSkins: OfflineSkinEntry[];
   news: NewsItem[];
   page: Page;
@@ -56,6 +59,7 @@ interface AppState {
   refreshInstances: () => Promise<void>;
   refreshAccounts: () => Promise<void>;
   refreshSkins: () => Promise<void>;
+  refreshCapes: () => Promise<void>;
   refreshOfflineSkins: () => Promise<void>;
   refreshNews: () => Promise<void>;
   updateSettings: (patch: Partial<Settings>) => Promise<Settings>;
@@ -88,6 +92,7 @@ export const useApp = create<AppState>((set, get) => ({
   accounts: [],
   currentAccount: null,
   skins: [],
+  capes: [],
   offlineSkins: [],
   news: [],
   page: 'home',
@@ -105,39 +110,78 @@ export const useApp = create<AppState>((set, get) => ({
   updateInstall: null,
 
   async init() {
+    let flushInitialPending: (() => void) | undefined;
     // Subscribe once before the first IPC reads so startup events are never missed.
     // StrictMode runs effects twice in development; duplicate listeners would double every event.
     if (!get().listenersAttached) {
-      fox().events.onLaunchState((state) => set({ launchState: state }));
-      fox().events.onLaunchLog((line) =>
-        set((current) => ({ logs: [...current.logs.slice(-999), line] })));
-      fox().events.onDownloadProgress((progress) =>
-        set((current) => {
-          const others = current.downloads.filter((item) => item.id !== progress.id);
-          const active = ACTIVE_DOWNLOAD_STATUSES.includes(progress.status);
-          const finished = {
-            ...progress,
-            finishedAt: progress.finishedAt ?? Date.now(),
-          };
-          return {
-            downloads: active ? [...others, progress] : others,
-            downloadHistory: active
-              ? current.downloadHistory
-              : [finished, ...current.downloadHistory.filter((item) => item.id !== progress.id)].slice(0, 50),
-          };
+      // Game logs and download ticks can arrive many times per second. Coalesce
+      // them into one Zustand update per frame so a busy launch cannot turn into
+      // hundreds of renderer re-renders.
+      let pendingLogs: LaunchLogLine[] = [];
+      const pendingDownloads = new Map<string, DownloadProgress>();
+      let flushFrame = 0;
+
+      const applyDownloads = (current: AppState, updates: DownloadProgress[]) => {
+        let active = current.downloads;
+        let history = current.downloadHistory;
+        for (const progress of updates) {
+          active = active.filter((item) => item.id !== progress.id);
+          if (ACTIVE_DOWNLOAD_STATUSES.includes(progress.status)) {
+            active = [...active, progress];
+          } else {
+            const finished = { ...progress, finishedAt: progress.finishedAt ?? Date.now() };
+            history = [finished, ...history.filter((item) => item.id !== progress.id)].slice(0, 50);
+          }
+        }
+        return { downloads: active, downloadHistory: history };
+      };
+
+      const flushPending = () => {
+        flushFrame = 0;
+        const lines = pendingLogs;
+        const updates = [...pendingDownloads.values()];
+        pendingLogs = [];
+        pendingDownloads.clear();
+        if (lines.length === 0 && updates.length === 0) return;
+        set((current) => ({
+          ...(lines.length ? { logs: [...current.logs, ...lines].slice(-1000) } : {}),
+          ...(updates.length ? applyDownloads(current, updates) : {}),
         }));
+      };
+
+      const scheduleFlush = () => {
+        if (!flushFrame) flushFrame = requestAnimationFrame(flushPending);
+      };
+
+      fox().events.onLaunchState((state) => set({ launchState: state }));
+      fox().events.onLaunchLog((line) => {
+        pendingLogs.push(line);
+        scheduleFlush();
+      });
+      fox().events.onDownloadProgress((progress) => {
+        pendingDownloads.set(progress.id, progress);
+        scheduleFlush();
+      });
       fox().events.onUpdateAvailable((update) => set({ updateAvailable: update, updateDismissed: isUpdateDismissed(update) }));
       fox().events.onUpdateProgress((status) => set({ updateInstall: status }));
       set({ listenersAttached: true });
+
+      // Events that arrived during the initial IPC reads are applied after the
+      // snapshot so they cannot be overwritten by it.
+      flushInitialPending = () => {
+        if (flushFrame) cancelAnimationFrame(flushFrame);
+        flushPending();
+      };
     }
 
     try {
-      const [settings, instances, accounts, currentAccount, skins, offlineSkins, launchState, logs, downloads, update, installStatus] = await Promise.all([
+      const [settings, instances, accounts, currentAccount, skins, capes, offlineSkins, launchState, logs, downloads, update, installStatus] = await Promise.all([
         fox().settings.get(),
         fox().instances.list(),
         fox().accounts.list(),
         fox().accounts.current(),
         fox().skins.list(),
+        fox().capes.list(),
         fox().skins.listOfflinePlayers(),
         fox().launcher.state(),
         fox().launcher.logs(),
@@ -151,6 +195,7 @@ export const useApp = create<AppState>((set, get) => ({
         accounts,
         currentAccount,
         skins,
+        capes,
         offlineSkins,
         launchState,
         logs,
@@ -162,10 +207,14 @@ export const useApp = create<AppState>((set, get) => ({
         selectedInstanceId: settings.lastInstanceId ?? instances[0]?.id ?? null,
         ready: true,
       });
+      flushInitialPending?.();
+      flushInitialPending = undefined;
 
       void get().refreshNews();
     } catch (error) {
       set({ ready: true });
+      flushInitialPending?.();
+      flushInitialPending = undefined;
       console.error('Fox Launcher failed to initialize:', error);
     }
   },
@@ -252,6 +301,10 @@ export const useApp = create<AppState>((set, get) => ({
     set({ skins: await fox().skins.list() });
   },
 
+  async refreshCapes() {
+    set({ capes: await fox().capes.list() });
+  },
+
   async refreshOfflineSkins() {
     set({ offlineSkins: await fox().skins.listOfflinePlayers() });
   },
@@ -283,3 +336,22 @@ export const useApp = create<AppState>((set, get) => ({
     }
   },
 }));
+
+/** Returns the active cape for an account, ignoring removed custom capes. */
+export function selectedCape(account: Account | null, capes: CapeEntry[]): CapeSelection | null {
+  const selection = account?.cape;
+  if (!selection) return null;
+  if (selection.type === 'custom') {
+    return capes.some((cape) => cape.hash === selection.hash) ? selection : null;
+  }
+  return selection;
+}
+
+/** Resolves the active cape to a texture URL usable by the 3D preview. */
+export function selectedCapeUrl(account: Account | null, capes: CapeEntry[]): string | undefined {
+  const cape = selectedCape(account, capes);
+  if (!cape) return undefined;
+  if (cape.type === 'official') return cape.url;
+  if (cape.type === 'custom') return capes.find((item) => item.hash === cape.hash)?.dataUrl;
+  return undefined;
+}
