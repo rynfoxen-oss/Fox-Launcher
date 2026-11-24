@@ -2,20 +2,20 @@
 
 A modern Minecraft launcher for Windows and macOS, built with Electron, React, and TypeScript.
 
-**Current release: 1.2.5** (stable) — [download it here](https://github.com/rynfoxen-oss/Fox-Launcher/releases/tag/v1.2.5).
+**Current release: 1.3.0** — [download it here](https://github.com/rynfoxen-oss/Fox-Launcher/releases/tag/v1.3.0).
 
-> **Which branch is this?** The default `main` branch still contains the original C# launcher. This Electron launcher lives on the [`electron-launcher`](https://github.com/rynfoxen-oss/Fox-Launcher/tree/electron-launcher) branch, which is where the `v1.2.5` release tag points.
+> **Which branch is this?** The default `main` branch still contains the original C# launcher. This Electron launcher lives on the [`electron-launcher`](https://github.com/rynfoxen-oss/Fox-Launcher/tree/electron-launcher) branch, which is where the `v1.3.0` release tag points.
 
 ## Download
 
 | Platform | File |
 | --- | --- |
-| Windows 10/11 | `Fox.Launcher.Setup.1.2.5.exe` |
-| macOS — Apple Silicon | `Fox-Launcher-1.2.5-mac-arm64.zip` |
-| macOS — Intel | `Fox-Launcher-1.2.5-mac-x64.zip` |
-| macOS — guided installer | `Fox-Launcher-1.2.5-mac-setup.zip` |
+| Windows 10/11 | `Fox.Launcher.Setup.1.3.0.exe` |
+| macOS — Apple Silicon | `Fox-Launcher-1.3.0-mac-arm64.zip` |
+| macOS — Intel | `Fox-Launcher-1.3.0-mac-x64.zip` |
+| macOS — guided installer | `Fox-Launcher-1.3.0-mac-setup.zip` |
 
-All files are attached to the [1.2.5 release](https://github.com/rynfoxen-oss/Fox-Launcher/releases/tag/v1.2.5).
+All files are attached to the [1.3.0 release](https://github.com/rynfoxen-oss/Fox-Launcher/releases/tag/v1.3.0).
 
 On macOS, extract the ZIP and drag **Fox Launcher.app** to Applications. If macOS blocks an unsigned build, right-click the app and choose **Open**, or run:
 
@@ -85,9 +85,10 @@ Java 8+ is needed to play. The launcher detects common Java installations and ca
 
 - Short friend codes (`FOX-XXXXXX`) and party codes (`FOXP-XXXXXX`) with checksum validation. Codes never carry your name, email, password, skin, or token.
 - Friend names and skins load from the other player's LAN launcher profile, so they match the name they signed up with. A local inline edit is available if a profile has not arrived yet.
-- Direct friend chat and voice calls over the local network. No hosted chat service, third-party tunnel, or website is involved.
+- Direct friend chat and voice calls over the local network, or over a direct TCP link when a host publishes a public `host:port`. No hosted chat service, third-party tunnel, or website is involved.
 - Host-created dedicated Minecraft server with the LAN address, mod list, roster, and skins carried in the invite. Party chat is relayed by the host; the launcher never asks your router to open a port.
-- Remote play is available only through a VPN or manual network setup you control. Fox Launcher does not provide or configure a tunnel.
+- Remote play outside the LAN uses a public `host:port` you forward yourself: game `25565`, chat `25566`, and direct friend/chat/call link `37822`. Unsolicited remote friend requests stay pending until approved inline. Fox Launcher does not provide or configure a tunnel.
+- No public `host:port`? On the same Wi-Fi/LAN or a VPN you set up yourself, just share the short `FOX-XXXXXX` friend code or `FOXP-XXXXXX` party code; discovery is automatic. Without one of those, a short code alone cannot find someone across the internet.
 - Party access: accounts signed in with Microsoft email can create or join a party; offline/cracked accounts whose got sign up with email and password can join. they need to create a name too.
 
 ### Launching

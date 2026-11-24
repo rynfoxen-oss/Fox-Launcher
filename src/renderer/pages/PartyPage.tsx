@@ -58,7 +58,11 @@ export function PartyPage() {
   const [joinCode, setJoinCode] = useState('');
   const [joinInstanceId, setJoinInstanceId] = useState('');
   const [manualAddress, setManualAddress] = useState('');
+  const [manualChatPort, setManualChatPort] = useState('25566');
+  const [manualSignalPort, setManualSignalPort] = useState('37822');
   const [remoteAddressInput, setRemoteAddressInput] = useState('');
+  const [remoteChatPortInput, setRemoteChatPortInput] = useState('25566');
+  const [remoteSignalPortInput, setRemoteSignalPortInput] = useState('37822');
 
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
@@ -138,7 +142,9 @@ export function PartyPage() {
 
   useEffect(() => {
     setRemoteAddressInput(party?.remoteAddress ?? '');
-  }, [party?.remoteAddress]);
+    setRemoteChatPortInput(String(party?.chatPort ?? 25_566));
+    setRemoteSignalPortInput(String(party?.remoteSignalPort ?? party?.friendPort ?? 37_822));
+  }, [party?.remoteAddress, party?.chatPort, party?.remoteSignalPort, party?.friendPort]);
 
   useEffect(() => {
     return window.fox.party.onChat((update: PartyChatUpdate) => {
@@ -243,6 +249,8 @@ export function PartyPage() {
       const joined = await window.fox.party.joinByAddress(
         address,
         joinInstanceId || selectedInstanceId || undefined,
+        Number(manualChatPort) || undefined,
+        Number(manualSignalPort) || undefined,
       );
       setParty(joined.party);
       setResult(joined);
@@ -260,7 +268,11 @@ export function PartyPage() {
     if (!address || !isHost) return;
     setStatusError(false);
     try {
-      const updated = await window.fox.party.setRemoteAddress(address, party?.chatPort);
+      const updated = await window.fox.party.setRemoteAddress(
+        address,
+        Number(remoteChatPortInput) || undefined,
+        Number(remoteSignalPortInput) || undefined,
+      );
       setParty(updated);
       note(t('remoteAddressSaved'));
     } catch (error) {
@@ -454,6 +466,7 @@ export function PartyPage() {
           <Globe2 size={18} />
         </div>
         <ol className="remote-guide-steps">
+          <li>{t('remotePortHint')}</li>
           <li>{t('remoteHostHint')}</li>
           <li>{t('remoteJoinHint')}</li>
           <li>{t('manualJoinNotice')}</li>
@@ -557,10 +570,32 @@ export function PartyPage() {
               <input
                 value={manualAddress}
                 onChange={(event) => setManualAddress(event.target.value)}
-                placeholder="vpn-host.example:25565"
+                placeholder="play.example.com:25565"
                 disabled={!hasAccess}
               />
             </Field>
+            <div className="party-form-row">
+              <Field label={t('remoteChatPort')}>
+                <input
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={manualChatPort}
+                  onChange={(event) => setManualChatPort(event.target.value)}
+                  disabled={!hasAccess}
+                />
+              </Field>
+              <Field label={t('remoteSignalPort')}>
+                <input
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={manualSignalPort}
+                  onChange={(event) => setManualSignalPort(event.target.value)}
+                  disabled={!hasAccess}
+                />
+              </Field>
+            </div>
             <Field label={t('gameInstance')} hint={t('partyInstanceMatch')}>
               <select value={joinInstanceId} onChange={(event) => setJoinInstanceId(event.target.value)} disabled={!hasAccess}>
                 <option value="">Auto-match / create</option>
@@ -704,7 +739,7 @@ export function PartyPage() {
             <div className="form-grid">
               <Field
                 label={t('inviteCode')}
-                hint={`${t('inviteHint')} ${t('inviteReady')} · ${t('lanOnly')} · ${inviteSkinCount} ${t('playerSkins')}`}
+                hint={`${t('inviteHint')} ${t('inviteReady')} · ${party.remoteAddress ? t('remoteInvite') : t('lanOnly')} · ${inviteSkinCount} ${t('playerSkins')}`}
               >
                 <input className="friend-code-input" value={shortInvite} readOnly />
               </Field>
@@ -734,13 +769,33 @@ export function PartyPage() {
                 <Globe2 size={18} />
               </div>
               <div className="form-grid">
-                <Field label={t('remoteAddressInput')}>
+                <Field label={t('remoteAddressInput')} hint={t('remotePortHint')}>
                   <input
                     value={remoteAddressInput}
                     onChange={(event) => setRemoteAddressInput(event.target.value)}
-                    placeholder="vpn-host.example:25565"
+                    placeholder="play.example.com:25565"
                   />
                 </Field>
+                <div className="party-form-row">
+                  <Field label={t('remoteChatPort')}>
+                    <input
+                      type="number"
+                      min={1}
+                      max={65535}
+                      value={remoteChatPortInput}
+                      onChange={(event) => setRemoteChatPortInput(event.target.value)}
+                    />
+                  </Field>
+                  <Field label={t('remoteSignalPort')}>
+                    <input
+                      type="number"
+                      min={1}
+                      max={65535}
+                      value={remoteSignalPortInput}
+                      onChange={(event) => setRemoteSignalPortInput(event.target.value)}
+                    />
+                  </Field>
+                </div>
                 <Button variant="secondary" icon={<Globe2 size={15} />} disabled={!remoteAddressInput.trim()} onClick={() => void saveRemoteAddress()}>
                   {t('save')}
                 </Button>

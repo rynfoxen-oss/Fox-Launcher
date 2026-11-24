@@ -7,13 +7,14 @@ import {
   shortCodeFromSeed,
   verifyShortCode,
 } from './codes';
-import { updateFriendsFromParty } from './friends';
-import { resolvePartyInvite } from './lanDiscovery';
+import { setPublicFriendAddress, updateFriendsFromParty } from './friends';
+import { linkRemoteFriend, remoteSignalPort, resolvePartyInvite } from './lanDiscovery';
 import { hasPartyAccess } from './foxId';
 import { createInstance } from './instances';
 import { getLoaderVersions } from './minecraft';
 import { listInstalledMods } from './mods';
 import {
+  allowRemoteChatJoins,
   connectPartyHub,
   partyChatSnapshot,
   sendPartyMessage,
@@ -22,7 +23,7 @@ import {
   stopPartyChat,
 } from './partyChat';
 import { currentPartyMember, publicPartyMember } from './partyIdentity';
-import { lanHostAddresses, localPartyAddress } from './partyNetwork';
+import { REMOTE_SIGNAL_PORT, lanHostAddresses, localPartyAddress } from './partyNetwork';
 import { serverStatus, startPartyServer, stopPartyServer } from './partyServer';
 import { store } from './store';
 import type {
@@ -192,6 +193,13 @@ function decodeInvite(inviteCode: string): PartyInvite {
   const chatHosts = Array.isArray(rawInvite.chatHosts)
     ? rawInvite.chatHosts.map((host) => cleanText(host, 253, 'Chat address')).filter(Boolean).slice(0, 12)
     : [];
+  let friendHost: string | undefined;
+  try {
+    friendHost = rawInvite.friendHost ? normalizeHost(rawInvite.friendHost) : undefined;
+  } catch {
+    friendHost = undefined;
+  }
+  const friendPort = normalizePort(rawInvite.friendPort);
 
   return {
     version: INVITE_VERSION,
@@ -205,6 +213,8 @@ function decodeInvite(inviteCode: string): PartyInvite {
       ? [chatAddress.host, ...chatHosts]
       : chatHosts,
     chatPort: chatAddress.port,
+    friendHost,
+    friendPort,
     minecraftVersion: cleanText(rawInvite.minecraftVersion, 40, 'Minecraft version'),
     loader,
     loaderVersion: typeof rawInvite.loaderVersion === 'string' ? rawInvite.loaderVersion.slice(0, 80) : undefined,
@@ -231,6 +241,8 @@ function partyToInvite(party: Party): PartyInvite {
     chatHost: party.chatHost,
     chatHosts: party.chatHosts,
     chatPort: party.chatPort,
+    friendHost: party.friendHost,
+    friendPort: party.friendPort,
     minecraftVersion: party.minecraftVersion,
     loader: party.loader,
     loaderVersion: party.loaderVersion,
@@ -366,6 +378,15 @@ async function applyRoster(members: PartyMember[]): Promise<void> {
   };
   updated.inviteCode = encodeInvite(partyToInvite(updated));
   await store.setParty(updated);
+}
+
+/** Remote invites carry the host's direct friend endpoint so chat and voice work too. */
+function linkRemoteInviteHost(invite: PartyInvite): void {
+  if (!invite.friendHost || !invite.friendPort) return;
+  const host = invite.members?.find((member) => member.status === 'host' && member.code)
+    ?? invite.members?.find((member) => member.name === invite.hostName && member.code);
+  if (!host?.code || currentPartyMember('online')?.code === host.code) return;
+  void linkRemoteFriend(host.code, `${invite.friendHost}:${invite.friendPort}`, invite.id).catch(() => undefined);
 }
 
 const chatHooks = {
@@ -520,6 +541,12 @@ export async function joinParty(inviteCode: string, preferredInstanceId?: string
     chatHost: invite.chatHost,
     chatHosts: invite.chatHosts,
     chatPort: invite.chatPort,
+    friendHost: invite.friendHost,
+    friendPort: invite.friendPort,
+    remoteSignalPort: invite.friendPort,
+    remoteAddress: invite.friendHost && invite.friendPort
+      ? `${invite.friendHost}:${invite.friendPort}`
+      : undefined,
     minecraftVersion: invite.minecraftVersion,
     loader: invite.loader,
     loaderVersion: invite.loaderVersion,
@@ -535,6 +562,7 @@ export async function joinParty(inviteCode: string, preferredInstanceId?: string
   party.inviteCode = encodeInvite(partyToInvite(party));
   await store.setParty(party);
   connectPartyHub(party, member, chatHooks);
+  linkRemoteInviteHost(invite);
   const result = await compatibility(party, selected.instanceId);
   return {
     party: store.get().party ?? party,
@@ -547,8 +575,13 @@ export async function joinParty(inviteCode: string, preferredInstanceId?: string
   };
 }
 
-/** Joins a Minecraft server directly by VPN/manual address, without LAN discovery or an invite code. */
-export async function joinByAddress(address: string, preferredInstanceId?: string): Promise<PartyJoinResult> {
+/** Joins a Minecraft server directly by public host:port, without LAN discovery or a short code. */
+export async function joinByAddress(
+  address: string,
+  preferredInstanceId?: string,
+  chatPortInput?: number,
+  signalPortInput?: number,
+): Promise<PartyJoinResult> {
   const account = requirePartyAccount();
   const target = normalizeAddress(address);
   if (!target.port) throw new Error('Include the server port, for example vpn-host.example:25565');
@@ -558,6 +591,8 @@ export async function joinByAddress(address: string, preferredInstanceId?: strin
 
   const id = shortCodeFromSeed(PARTY_PREFIX, `manual:${target.host}:${target.port}:${instance.id}`);
   const member = selfMember('online', account.name === target.host ? 'host' : 'ready');
+  const chatPort = normalizePort(chatPortInput) ?? 25_566;
+  const signalPort = normalizePort(signalPortInput) ?? REMOTE_SIGNAL_PORT;
   const invite: PartyInvite = {
     version: INVITE_VERSION,
     id,
@@ -565,6 +600,11 @@ export async function joinByAddress(address: string, preferredInstanceId?: strin
     name: `Remote · ${target.host}`,
     serverHost: target.host,
     serverPort: target.port,
+    chatHost: target.host,
+    chatHosts: [target.host],
+    chatPort,
+    friendHost: target.host,
+    friendPort: signalPort,
     minecraftVersion: instance.minecraftVersion,
     loader: instance.loader,
     loaderVersion: instance.loaderVersion,
@@ -580,21 +620,27 @@ export async function joinByAddress(address: string, preferredInstanceId?: strin
     mods: invite.mods ?? [],
     instanceId: instance.id,
     join: { host: target.host, port: target.port },
-    chat: { status: 'offline', message: 'Manual address join has no chat relay. Add the host as a friend for voice chat.' },
+    chat: { status: 'connecting', message: 'Connecting to the host’s party chat…', address: `${target.host}:${chatPort}` },
   };
   await store.setParty(party);
+  connectPartyHub(party, member, chatHooks);
+  allowRemoteChatJoins(true);
   const result = await compatibility(party, instance.id);
   return {
     party: store.get().party ?? party,
     instanceId: instance.id,
     join: party.join,
     ...result,
-    notice: `Joined ${target.host}:${target.port} directly. ${result.notice}`.trim(),
+    notice: `Joined ${target.host}:${target.port} directly. Party chat uses the same public host. ${result.notice}`.trim(),
   };
 }
 
 /** Host-only: rewrites the shareable invite with a VPN/manual address the host already controls. */
-export async function setPartyRemoteAddress(address: string, chatPort?: number): Promise<Party> {
+export async function setPartyRemoteAddress(
+  address: string,
+  chatPort?: number,
+  signalPortInput?: number,
+): Promise<Party> {
   const account = requirePartyAccount();
   const party = currentParty();
   if (!party) throw new Error('Create or join a party first');
@@ -606,6 +652,15 @@ export async function setPartyRemoteAddress(address: string, chatPort?: number):
   const target = normalizeAddress(address, party.serverPort ?? 25_565);
   if (!target.port) throw new Error('Include the server port, for example vpn-host.example:25565');
   const remoteChatPort = normalizePort(chatPort ?? party.chatPort ?? 25_566) ?? 25_566;
+  const signalPort = normalizePort(signalPortInput ?? party.remoteSignalPort ?? REMOTE_SIGNAL_PORT)
+    ?? REMOTE_SIGNAL_PORT;
+  const boundPort = remoteSignalPort();
+  if (boundPort !== signalPort) {
+    throw new Error(
+      `Direct friend port ${signalPort} is not available on this device. ` +
+      `The launcher is listening on ${boundPort || 'no port'}; close the other program and restart Fox Launcher.`,
+    );
+  }
   const remoteAddress = `${target.host}:${target.port}`;
   const updated: Party = {
     ...party,
@@ -614,6 +669,9 @@ export async function setPartyRemoteAddress(address: string, chatPort?: number):
     chatHost: target.host,
     chatHosts: [target.host],
     chatPort: remoteChatPort,
+    friendHost: target.host,
+    friendPort: signalPort,
+    remoteSignalPort: signalPort,
     remoteAddress,
     join: { host: target.host, port: target.port },
     chat: {
@@ -625,13 +683,15 @@ export async function setPartyRemoteAddress(address: string, chatPort?: number):
     server: party.server
       ? {
           ...party.server,
-          networkMessage: 'Remote friends need your own VPN or manual setup. Fox Launcher does not open router ports.',
+          networkMessage: 'Remote friends can join with your public host:port. Forward the ports yourself; Fox Launcher never opens router ports.',
         }
       : undefined,
   };
   updated.inviteCode = encodeInvite(partyToInvite(updated));
   await store.setParty(updated);
-  return updated;
+  allowRemoteChatJoins(true);
+  await setPublicFriendAddress(target.host, signalPort);
+  return store.get().party ?? updated;
 }
 
 export async function selectPartyInstance(instanceId: string): Promise<PartyJoinResult> {

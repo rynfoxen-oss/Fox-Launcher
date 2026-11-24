@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Check,
   Copy,
+  Globe2,
   KeyRound,
   MessageCircle,
   Mic,
@@ -21,6 +22,7 @@ import type {
   FriendMessage,
   FriendsUpdate,
   PartyMember,
+  RemoteFriendRequest,
 } from '../../shared/types';
 import { useApp } from '../store';
 import { useT } from '../i18n';
@@ -69,6 +71,10 @@ export function FriendsPage() {
   const [myCode, setMyCode] = useState('');
   const [partyMembers, setPartyMembers] = useState<PartyMember[]>([]);
   const [codeInput, setCodeInput] = useState('');
+  const [remoteCodeInput, setRemoteCodeInput] = useState('');
+  const [remoteAddressInput, setRemoteAddressInput] = useState('');
+  const [publicAddressInput, setPublicAddressInput] = useState('');
+  const [remoteRequests, setRemoteRequests] = useState<RemoteFriendRequest[]>([]);
   const [status, setStatus] = useState('');
   const [statusError, setStatusError] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -91,11 +97,15 @@ export function FriendsPage() {
   async function load() {
     setStatusError(false);
     try {
-      const [savedFriends, party] = await Promise.all([
+      const [savedFriends, party, requests, publicAddress] = await Promise.all([
         window.fox.friends.list(),
         window.fox.party.current(),
+        window.fox.friends.remoteRequests(),
+        window.fox.friends.publicAddress(),
       ]);
       setFriends(savedFriends);
+      setRemoteRequests(requests);
+      setPublicAddressInput(publicAddress);
       setPartyMembers(party?.members ?? []);
       setSelectedCode((previous) => {
         const next = previous && savedFriends.some((friend) => friend.code === previous)
@@ -200,6 +210,53 @@ export function FriendsPage() {
       report(error, t('addFriend'));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function addRemoteFriend() {
+    const code = remoteCodeInput.trim();
+    const address = remoteAddressInput.trim();
+    if ((!code || !address) || busy) return;
+    setBusy(true);
+    setStatusError(false);
+    try {
+      const result = await window.fox.friends.addRemoteCode(code, address);
+      setFriends(result.friends);
+      setRemoteCodeInput('');
+      note(result.status === 'linked' ? t('remoteFriendLinked') : t('remoteFriendPending'));
+      await load();
+    } catch (error) {
+      report(error, t('remoteFriendTitle'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function respondToRequest(code: string, accept: boolean) {
+    setStatusError(false);
+    try {
+      const updated = accept
+        ? await window.fox.friends.acceptRemoteRequest(code)
+        : await window.fox.friends.rejectRemoteRequest(code);
+      setFriends(updated);
+      setRemoteRequests((previous) => previous.filter((request) => request.code !== code));
+      note(accept ? t('remoteFriendLinked') : t('rejectRemoteRequest'));
+      await load();
+    } catch (error) {
+      report(error, accept ? t('acceptRemoteRequest') : t('rejectRemoteRequest'));
+    }
+  }
+
+  async function savePublicAddress() {
+    const address = publicAddressInput.trim();
+    if (!address) return;
+    setStatusError(false);
+    try {
+      const saved = await window.fox.friends.setPublicAddress(address);
+      setPublicAddressInput(saved);
+      note(t('publicFriendSaved'));
+    } catch (error) {
+      report(error, t('publicFriendAddress'));
     }
   }
 
@@ -376,6 +433,10 @@ export function FriendsPage() {
   useEffect(() => {
     return window.fox.friends.onUpdate((update: FriendsUpdate) => {
       if (update.event === 'peers' || update.event === 'identity') void load();
+      if (update.event === 'request') {
+        setRemoteRequests(update.requests ?? []);
+        void load();
+      }
       if (update.event === 'message') void loadMessages(selectedRef.current);
       const event = update.call as FriendCallEvent | undefined;
       if (event) {
@@ -414,6 +475,7 @@ export function FriendsPage() {
   }
 
   function sourceLabel(friend: Friend): string {
+    if (friend.source === 'remote') return t('sourceRemote');
     return friend.source === 'party' ? t('sourceParty') : t('sourceCode');
   }
 
@@ -489,6 +551,7 @@ export function FriendsPage() {
               <h3>{t('addFriend')}</h3>
               <p>{t('addFriendHint')}</p>
               <p>{t('friendNameHint')}</p>
+              <p>{t('friendNoPublicHint')}</p>
             </div>
             <UserPlus size={18} />
           </div>
@@ -504,6 +567,47 @@ export function FriendsPage() {
             </Field>
             <Button icon={<UserPlus size={16} />} loading={busy} disabled={!codeInput.trim()} onClick={() => void addByCode()}>
               {t('addFriend')}
+            </Button>
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-header">
+            <div>
+              <h3>{t('remoteFriendTitle')}</h3>
+              <p>{t('remoteFriendHint')}</p>
+            </div>
+            <Globe2 size={18} />
+          </div>
+          <div className="form-grid">
+            <Field label={t('friendCodeInput')}>
+              <input
+                className="friend-code-input"
+                value={remoteCodeInput}
+                maxLength={16}
+                onChange={(event) => setRemoteCodeInput(event.target.value.toUpperCase())}
+                placeholder="FOX-XXXXXX"
+              />
+            </Field>
+            <Field label={t('remoteFriendAddress')}>
+              <input
+                value={remoteAddressInput}
+                onChange={(event) => setRemoteAddressInput(event.target.value)}
+                placeholder="play.example.com:37822"
+              />
+            </Field>
+            <Button variant="secondary" icon={<Globe2 size={16} />} loading={busy} disabled={!remoteCodeInput.trim() || !remoteAddressInput.trim()} onClick={() => void addRemoteFriend()}>
+              {t('remoteFriendTitle')}
+            </Button>
+            <Field label={t('publicFriendAddress')} hint={t('publicFriendAddressHint')}>
+              <input
+                value={publicAddressInput}
+                onChange={(event) => setPublicAddressInput(event.target.value)}
+                placeholder="play.example.com:37822"
+              />
+            </Field>
+            <Button variant="subtle" icon={<Check size={15} />} disabled={!publicAddressInput.trim()} onClick={() => void savePublicAddress()}>
+              {t('save')}
             </Button>
           </div>
         </div>
@@ -534,6 +638,39 @@ export function FriendsPage() {
           </div>
         ) : (
           <p className="status-description">{t('noPartyMembers')}</p>
+        )}
+      </div>
+
+      <div className="panel friends-roster-panel">
+        <div className="panel-header">
+          <div>
+            <h3>{t('remoteRequestsTitle')}</h3>
+            <p>{t('remoteRequestHint')}</p>
+          </div>
+          <ShieldCheck size={18} />
+        </div>
+        {remoteRequests.length ? (
+          <div className="friends-roster-list">
+            {remoteRequests.map((request) => (
+              <div key={request.code} className="friend-roster-row">
+                <span className="party-presence-dot online" />
+                <div className="friend-roster-copy">
+                  <strong className="ellipsis">{request.name}</strong>
+                  <span>{request.code} · {request.address}</span>
+                </div>
+                <div className="party-action-row">
+                  <Button size="sm" icon={<Check size={14} />} onClick={() => void respondToRequest(request.code, true)}>
+                    {t('acceptRemoteRequest')}
+                  </Button>
+                  <Button size="sm" variant="ghost" icon={<Trash2 size={14} />} onClick={() => void respondToRequest(request.code, false)}>
+                    {t('rejectRemoteRequest')}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="status-description">{t('noRemoteRequests')}</p>
         )}
       </div>
 

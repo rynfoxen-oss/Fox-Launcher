@@ -21,18 +21,24 @@ import { syncAllCustomSkinLoaders } from './customSkinLoader';
 import { events } from './events';
 import {
   acceptCall,
+  acceptRemoteRequest,
   addFriendByCode,
   addFriendFromParty,
+  addRemoteFriendByCode,
   callFriend,
   endCall,
   friendMessages,
   listFriendPeers,
   listFriends,
   myFriendCode,
+  publicFriendAddress,
   rejectCall,
+  rejectRemoteRequest,
+  remoteFriendRequests,
   removeFriend,
   renameFriend,
   sendFriendMessage,
+  setPublicFriendAddress,
   voiceSend,
 } from './friends';
 import { loginEmail, signupEmail } from './foxId';
@@ -231,10 +237,15 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('party:create', (_event, input) => createParty(input));
   ipcMain.handle('party:join', (_event, inviteCode: string, preferredInstanceId?: string) =>
     joinParty(inviteCode, preferredInstanceId));
-  ipcMain.handle('party:joinByAddress', (_event, address: string, preferredInstanceId?: string) =>
-    joinByAddress(address, preferredInstanceId));
-  ipcMain.handle('party:setRemoteAddress', (_event, address: string, chatPort?: number) =>
-    setPartyRemoteAddress(address, chatPort));
+  ipcMain.handle('party:joinByAddress', (
+    _event,
+    address: string,
+    preferredInstanceId?: string,
+    chatPort?: number,
+    signalPort?: number,
+  ) => joinByAddress(address, preferredInstanceId, chatPort, signalPort));
+  ipcMain.handle('party:setRemoteAddress', (_event, address: string, chatPort?: number, signalPort?: number) =>
+    setPartyRemoteAddress(address, chatPort, signalPort));
   ipcMain.handle('party:selectInstance', (_event, instanceId: string) => selectPartyInstance(instanceId));
   ipcMain.handle('party:leave', () => leaveParty());
   ipcMain.handle('party:serverStatus', () => ({ party: currentParty(), server: serverStatus() }));
@@ -262,6 +273,14 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('friends:myCode', () => myFriendCode());
   ipcMain.handle('friends:peers', () => listFriendPeers());
   ipcMain.handle('friends:addCode', (_event, code: string) => addFriendByCode(code));
+  ipcMain.handle('friends:addRemoteCode', (_event, code: string, address: string) =>
+    addRemoteFriendByCode(code, address));
+  ipcMain.handle('friends:remoteRequests', () => remoteFriendRequests());
+  ipcMain.handle('friends:acceptRemoteRequest', (_event, code: string) => acceptRemoteRequest(code));
+  ipcMain.handle('friends:rejectRemoteRequest', (_event, code: string) => rejectRemoteRequest(code));
+  ipcMain.handle('friends:publicAddress', () => publicFriendAddress());
+  ipcMain.handle('friends:setPublicAddress', (_event, address: string, port?: number) =>
+    setPublicFriendAddress(address, port));
   ipcMain.handle('friends:addPartyMember', (_event, member: PartyMember) => addFriendFromParty(member));
   ipcMain.handle('friends:remove', (_event, id: string) => removeFriend(id));
   ipcMain.handle('friends:rename', (_event, id: string, name: string) => renameFriend(id, name));

@@ -1,5 +1,6 @@
 import type { PartyMember, PartyPresence, PartySkin, SkinModel } from '../shared/types';
 import { friendShortCode } from './codes';
+import { REMOTE_SIGNAL_PORT, parseDirectEndpoint } from './partyNetwork';
 import { store } from './store';
 
 const MAX_SKIN_DATA = 120_000;
@@ -33,6 +34,7 @@ export function currentPartyMember(presence: PartyPresence = 'online'): PartyMem
     capeDataUrl: capeDataUrl || undefined,
   };
 
+  const direct = parseDirectEndpoint(store.getRemoteSignalAddress(), REMOTE_SIGNAL_PORT);
   return {
     name: account.name,
     code: friendShortCode(account),
@@ -42,6 +44,8 @@ export function currentPartyMember(presence: PartyPresence = 'online'): PartyMem
     status: 'ready',
     skin,
     presence,
+    friendHost: direct?.host,
+    friendPort: direct?.port,
   };
 }
 
@@ -55,5 +59,7 @@ export function publicPartyMember(member: PartyMember): PartyMember {
     status: member.status,
     skin: member.skin,
     presence: member.presence,
+    friendHost: member.friendHost,
+    friendPort: member.friendPort,
   };
 }

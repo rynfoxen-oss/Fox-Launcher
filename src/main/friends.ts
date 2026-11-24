@@ -10,8 +10,14 @@ import { events } from './events';
 import {
   acceptFriendCall,
   endFriendCall,
+  acceptRemoteRequest as discoveryAcceptRemoteRequest,
+  getRemoteSignalAddress,
+  linkRemoteFriend,
+  listRemoteRequests,
   listFriendPeers as discoveryFriendPeers,
   messagesFor,
+  rejectRemoteRequest as discoveryRejectRemoteRequest,
+  setRemoteSignalAddress as discoverySetRemoteSignalAddress,
   rejectFriendCall,
   resolveFriendPeer,
   sendChat,
@@ -19,6 +25,8 @@ import {
   startFriendCall,
 } from './lanDiscovery';
 import { currentPartyMember } from './partyIdentity';
+import { REMOTE_SIGNAL_PORT, formatDirectEndpoint, parseDirectEndpoint } from './partyNetwork';
+import { setPartyChatRemoteEndpoint } from './partyChat';
 import { store } from './store';
 import type {
   Friend,
@@ -29,6 +37,7 @@ import type {
   PartyMember,
   PartyPresence,
   PartySkin,
+  RemoteFriendRequest,
   SkinModel,
 } from '../shared/types';
 
@@ -111,6 +120,8 @@ function sanitizePartyMember(value: unknown): PartyMember | null {
     status,
     skin: sanitizeSkin(raw.skin),
     presence: normalizePresence(raw.presence),
+    friendHost: parseDirectEndpoint(`${raw.friendHost ?? ''}:${raw.friendPort ?? ''}`)?.host,
+    friendPort: parseDirectEndpoint(`${raw.friendHost ?? ''}:${raw.friendPort ?? ''}`)?.port,
   };
 }
 
@@ -146,6 +157,7 @@ function friendFromSource(input: {
   skin?: PartySkin;
   presence: PartyPresence;
   source: Friend['source'];
+  remoteAddress?: string;
 }): Friend {
   const now = Date.now();
   return {
@@ -158,6 +170,7 @@ function friendFromSource(input: {
     addedAt: now,
     lastSeen: input.presence === 'offline' ? 0 : now,
     source: input.source,
+    remoteAddress: input.remoteAddress,
   };
 }
 
@@ -173,7 +186,8 @@ async function upsertFriend(next: Friend): Promise<Friend[]> {
         skin: next.skin ?? existing.skin,
         presence: next.presence,
         lastSeen: next.presence === 'offline' ? existing.lastSeen : Date.now(),
-        source: existing.source,
+        source: next.remoteAddress ? 'remote' : existing.source,
+        remoteAddress: next.remoteAddress ?? existing.remoteAddress,
       }
     : next;
   const updated = [merged, ...friends.filter((item) => item.id !== merged.id && item.code !== merged.code)]
@@ -230,16 +244,93 @@ export async function addFriendByCode(input: string): Promise<Friend[]> {
   }));
 }
 
+/** Adds a friend outside the LAN using a public host:port the user already controls. */
+export async function addRemoteFriendByCode(
+  input: string,
+  address: string,
+): Promise<{ friends: Friend[]; status: 'linked' | 'pending' }> {
+  const short = normalizeShortCode(input, FRIEND_PREFIX);
+  if (!verifyShortCode(short, FRIEND_PREFIX)) {
+    throw new Error('This friend code is damaged or was changed');
+  }
+  const endpoint = parseDirectEndpoint(address, REMOTE_SIGNAL_PORT);
+  if (!endpoint) throw new Error('Enter the public host and port, for example play.example.com:37822');
+  const status = await linkRemoteFriend(short, formatDirectEndpoint(endpoint));
+  const peer = discoveryFriendPeers().find((item) => item.code === short);
+  const friends = await upsertFriend(friendFromSource({
+    code: short,
+    name: peer?.name || `Friend ${short.slice(-3)}`,
+    accountType: peer?.accountType ?? 'offline',
+    skin: peer?.skin,
+    presence: status === 'linked' ? 'online' : 'offline',
+    source: 'remote',
+    remoteAddress: formatDirectEndpoint(endpoint),
+  }));
+  return { friends, status };
+}
+
+export function remoteFriendRequests(): RemoteFriendRequest[] {
+  return listRemoteRequests();
+}
+
+export async function acceptRemoteRequest(code: string): Promise<Friend[]> {
+  return discoveryAcceptRemoteRequest(code);
+}
+
+export async function rejectRemoteRequest(code: string): Promise<Friend[]> {
+  return discoveryRejectRemoteRequest(code);
+}
+
+export function publicFriendAddress(): string {
+  return getRemoteSignalAddress();
+}
+
+/** Saves the caller's public endpoint and publishes it to any active party. */
+export async function setPublicFriendAddress(
+  address: string,
+  port?: number,
+): Promise<string> {
+  const endpointString = await discoverySetRemoteSignalAddress(address, port);
+  const endpoint = parseDirectEndpoint(endpointString, REMOTE_SIGNAL_PORT);
+  const party = store.get().party;
+  if (endpoint && party) {
+    const me = currentPartyMember('online');
+    const updated: typeof party = {
+      ...party,
+      members: party.members.map((member) => member.code && me?.code === member.code
+        ? { ...member, friendHost: endpoint.host, friendPort: endpoint.port }
+        : member),
+    };
+    if (updated.hostEmail && me?.email === updated.hostEmail
+      || (!updated.hostEmail && updated.hostName === me?.name)) {
+      updated.friendHost = endpoint.host;
+      updated.friendPort = endpoint.port;
+    }
+    await store.setParty(updated);
+    setPartyChatRemoteEndpoint(endpoint.host, endpoint.port);
+  }
+  return endpointString;
+}
+
 export async function addFriendFromParty(member: PartyMember): Promise<Friend[]> {
   const safe = sanitizePartyMember(member);
   if (!safe) throw new Error('That party member has no name to add');
+  const remote = safe.friendHost && safe.friendPort
+    ? parseDirectEndpoint(`${safe.friendHost}:${safe.friendPort}`)
+    : null;
+  if (remote && safe.code && !discoveryFriendPeers().some((peer) => peer.code === safe.code)) {
+    // Best effort: a LAN peer is already reachable, and a refused public link
+    // must never block adding the roster identity to the local friend list.
+    await linkRemoteFriend(safe.code, formatDirectEndpoint(remote)).catch(() => undefined);
+  }
   return upsertFriend(friendFromSource({
     code: safe.code!,
     name: safe.name,
     accountType: safe.accountType,
     skin: safe.skin,
     presence: normalizePresence(safe.presence),
-    source: 'party',
+    source: remote ? 'remote' : 'party',
+    remoteAddress: remote ? formatDirectEndpoint(remote) : undefined,
   }));
 }
 
@@ -286,6 +377,7 @@ export async function renameFriend(id: string, name: string): Promise<Friend[]> 
     event: 'peers',
     peers: listFriendPeers(),
     messages: store.listFriendMessages(),
+    requests: remoteFriendRequests(),
   });
   return updated;
 }
@@ -315,6 +407,7 @@ export async function acceptCall(friendCode: string, callId: string): Promise<vo
     event: 'call',
     peers: listFriendPeers(),
     messages: store.listFriendMessages(),
+    requests: remoteFriendRequests(),
     call: { friendCode, callId, action: 'accept', from: 'you' },
   });
 }

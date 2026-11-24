@@ -11,7 +11,14 @@ import {
 } from './codes';
 import { events } from './events';
 import { currentPartyMember } from './partyIdentity';
-import { lanBroadcastTargets, lanHostAddresses, lanUnicastTargets } from './partyNetwork';
+import {
+  REMOTE_SIGNAL_PORT,
+  formatDirectEndpoint,
+  lanBroadcastTargets,
+  lanHostAddresses,
+  lanUnicastTargets,
+  parseDirectEndpoint,
+} from './partyNetwork';
 import { store } from './store';
 import type {
   Account,
@@ -21,6 +28,7 @@ import type {
   FriendPeer,
   FriendsUpdate,
   PartySkin,
+  RemoteFriendRequest,
   SkinModel,
 } from '../shared/types';
 
@@ -33,6 +41,10 @@ const MAX_SKIN_DATA = 120_000;
 const MAX_FRIENDS = 100;
 const MAX_HOSTS = 12;
 const SEEN_TTL = 60_000;
+const MAX_REMOTE_LINKS = 24;
+const REMOTE_REQUEST_TTL = 10 * 60_000;
+const LINK_ATTEMPTS_WINDOW = 60_000;
+const MAX_LINK_ATTEMPTS = 8;
 const INSTANCE_ID = randomUUID();
 
 interface WireRecord {
@@ -50,6 +62,20 @@ interface WireRecord {
 interface StoredPeer extends WireRecord {
   lastSeen: number;
   skin?: PartySkin;
+  /** Linked through a host-owned public endpoint rather than LAN discovery. */
+  remote?: boolean;
+  /** Public host:port supplied by the peer for reconnects, never a LAN address. */
+  remoteAddress?: string;
+}
+
+interface PendingRemoteRequest {
+  code: string;
+  name: string;
+  accountType: Account['type'];
+  skin?: PartySkin;
+  address: string;
+  socket: net.Socket;
+  receivedAt: number;
 }
 
 interface FullRecord extends WireRecord {
@@ -64,6 +90,12 @@ interface CallSession {
 }
 
 const peers = new Map<string, StoredPeer>();
+/** Persistent connections used for friends outside the LAN; no relay service is involved. */
+const remoteSockets = new Map<string, net.Socket>();
+/** Unsolicited links are held here until the user approves them inline. */
+const remoteRequests = new Map<string, PendingRemoteRequest>();
+/** Cheap local flood guard for incoming direct link attempts. */
+const linkAttempts = new Map<string, number[]>();
 const calls = new Map<string, CallSession>();
 const profileWaiters = new Map<string, Array<(record: FullRecord | null) => void>>();
 const lastProfileFetch = new Map<string, number>();
@@ -120,6 +152,91 @@ function cleanHost(value: unknown): string {
 function cleanPort(value: unknown): number {
   const port = Number(value);
   return Number.isInteger(port) && port > 0 && port < 65_536 ? port : 0;
+}
+
+function cleanCode(value: unknown): string {
+  const code = normalizeShortCode(cleanText(value, 32), FRIEND_PREFIX);
+  return verifyShortCode(code, FRIEND_PREFIX) ? code : '';
+}
+
+/** Accepts only a direct public host:port supplied by the user, never a service URL. */
+function parseRemoteAddress(value: unknown): { host: string; port: number } {
+  const endpoint = parseDirectEndpoint(value, REMOTE_SIGNAL_PORT);
+  if (!endpoint) throw new Error('Enter the public host and port, for example play.example.com:37822');
+  return endpoint;
+}
+
+/** Redact private LAN addresses before anything is sent over a remote link. */
+function redactedRecord(record: FullRecord): WireRecord {
+  return {
+    ...toWire(record),
+    host: 'remote.peer',
+    hosts: [],
+    port: UDP_PORT,
+    profilePort: REMOTE_SIGNAL_PORT,
+  };
+}
+
+function observedRemoteAddress(socket?: net.Socket): string {
+  return cleanHost(cleanText(socket?.remoteAddress, 253).replace(/^::ffff:/, ''));
+}
+
+/** Never trust a caller-supplied address for abuse checks or stored peer identity. */
+function remoteLinkAddress(_message: Record<string, unknown>, socket?: net.Socket): string {
+  const observed = observedRemoteAddress(socket);
+  return observed ? `${observed}:${REMOTE_SIGNAL_PORT}` : '';
+}
+
+function allowLinkAttempt(key: string): boolean {
+  const now = Date.now();
+  const recent = (linkAttempts.get(key) ?? []).filter((time) => now - time < LINK_ATTEMPTS_WINDOW);
+  if (recent.length >= MAX_LINK_ATTEMPTS) {
+    linkAttempts.set(key, recent);
+    return false;
+  }
+  recent.push(now);
+  linkAttempts.set(key, recent);
+  return true;
+}
+
+function pruneRemoteRequests(): void {
+  const now = Date.now();
+  for (const [code, request] of remoteRequests) {
+    if (request.socket.destroyed || now - request.receivedAt > REMOTE_REQUEST_TTL) {
+      remoteRequests.delete(code);
+      if (!request.socket.destroyed) request.socket.destroy();
+    }
+  }
+}
+
+export function listRemoteRequests(): RemoteFriendRequest[] {
+  pruneRemoteRequests();
+  return [...remoteRequests.values()].map((request) => ({
+    code: request.code,
+    name: request.name,
+    accountType: request.accountType,
+    skin: request.skin,
+    address: request.address,
+    receivedAt: request.receivedAt,
+  }));
+}
+
+function forgetRemoteSocket(socket: net.Socket): void {
+  let linksChanged = false;
+  for (const [code, link] of remoteSockets) {
+    if (link !== socket) continue;
+    remoteSockets.delete(code);
+    peers.delete(`friend:${code}`);
+    linksChanged = true;
+  }
+  let requestsChanged = false;
+  for (const [code, request] of remoteRequests) {
+    if (request.socket !== socket) continue;
+    remoteRequests.delete(code);
+    requestsChanged = true;
+  }
+  if (linksChanged) emitUpdate('peers');
+  if (requestsChanged) emitUpdate('request');
 }
 
 function boundedDataUrl(value: unknown): string {
@@ -232,7 +349,7 @@ function myCode(): string {
 function prunePeers(): void {
   const now = Date.now();
   for (const [key, peer] of peers) {
-    if (now - peer.lastSeen > PEER_TIMEOUT) peers.delete(key);
+    if (!peer.remote && now - peer.lastSeen > PEER_TIMEOUT) peers.delete(key);
   }
 }
 
@@ -247,6 +364,7 @@ function emitUpdate(
     event,
     peers: listFriendPeers(),
     messages: [...store.listFriendMessages()],
+    requests: listRemoteRequests(),
     call,
     signal,
   });
@@ -286,11 +404,22 @@ function sendUdp(payload: Record<string, unknown>, hosts?: string | string[], sw
 }
 
 function sendDirect(
-  peer: Pick<StoredPeer, 'host' | 'hosts' | 'profilePort'>,
+  peer: Pick<StoredPeer, 'code' | 'host' | 'hosts' | 'profilePort'> & { remote?: boolean },
   payload: Record<string, unknown>,
 ): void {
-  if (!tcp) return;
   const encoded = `${JSON.stringify(directPayload(payload))}\n`;
+  const code = cleanCode(peer.code);
+  const link = code ? remoteSockets.get(code) : undefined;
+  if (peer.remote || link) {
+    if (link && !link.destroyed) {
+      link.write(encoded);
+      return;
+    }
+    // A remote peer's private LAN address is meaningless to us. Reconnect only
+    // when a saved friend has a public endpoint we can dial again.
+    if (peer.remote) return;
+  }
+  if (!tcp || !peer.profilePort) return;
   const hosts = targetHosts(peer.hosts?.length ? peer.hosts : peer.host);
   for (const host of hosts) {
     const socket = net.connect(peer.profilePort, host);
@@ -408,7 +537,8 @@ async function ensureFriend(code: string, peer: StoredPeer, name: string): Promi
       presence: 'online',
       addedAt: now,
       lastSeen: now,
-      source: 'code',
+      source: peer.remote ? 'remote' : 'code',
+      remoteAddress: peer.remoteAddress ?? (peer.remote ? `${peer.host}:${peer.profilePort}` : undefined),
     };
     const friends = store.listFriends();
     await store.setFriends([friend, ...friends].slice(0, MAX_FRIENDS));
@@ -434,16 +564,159 @@ async function syncFriendPresence(): Promise<void> {
   });
 }
 
-function handleCall(message: Record<string, unknown>): void {
-  const from = normalizeShortCode(cleanText(message.from, 32), FRIEND_PREFIX);
+function sendRemoteHelloResult(socket: net.Socket, local: FullRecord, pending: boolean): void {
+  const payload: Record<string, unknown> = {
+    t: 'remoteHelloResult',
+    code: local.code,
+    pending,
+    remoteAddress: store.getRemoteSignalAddress() || undefined,
+  };
+  if (!pending) payload.record = { ...redactedRecord(local), skin: local.skin };
+  socket.write(`${JSON.stringify(payload)}\n`);
+}
+
+async function promoteRemotePeer(
+  code: string,
+  socket: net.Socket,
+  input: { name: string; accountType: Account['type']; skin?: PartySkin; address: string },
+): Promise<void> {
+  const previous = remoteSockets.get(code);
+  if (previous && previous !== socket) previous.destroy();
+  const host = observedRemoteAddress(socket) || 'remote.peer';
+  const peer: StoredPeer = {
+    kind: 'friend',
+    code,
+    name: cleanText(input.name, 16) || `Fox ${code.slice(-3)}`,
+    accountType: input.accountType,
+    host,
+    hosts: [],
+    port: UDP_PORT,
+    profilePort: REMOTE_SIGNAL_PORT,
+    skin: input.skin,
+    lastSeen: Date.now(),
+    remote: true,
+    remoteAddress: input.address || undefined,
+  };
+  peers.set(`friend:${code}`, peer);
+  remoteSockets.set(code, socket);
+  await ensureFriend(code, peer, peer.name);
+  emitUpdate('peers');
+}
+
+/** Host side of a direct friend link: the guest dials a port the host owns. */
+async function handleRemoteHello(message: Record<string, unknown>, socket?: net.Socket): Promise<void> {
+  if (!socket || socket.destroyed) return;
+  const code = cleanCode(message.code);
+  const local = localRecords().find((record) => record.kind === 'friend');
+  if (!code || !local) {
+    socket.write(`${JSON.stringify({ t: 'error', message: 'Choose an account before linking a remote friend' })}\n`);
+    socket.destroy();
+    return;
+  }
+  const address = remoteLinkAddress(message, socket);
+  if (!allowLinkAttempt(`${code}:${observedRemoteAddress(socket) || 'unknown'}`)) {
+    socket.write(`${JSON.stringify({ t: 'error', message: 'Too many direct link attempts. Try again in a minute.' })}\n`);
+    socket.destroy();
+    return;
+  }
+  if (!remoteSockets.has(code) && remoteSockets.size + remoteRequests.size >= MAX_REMOTE_LINKS) {
+    socket.write(`${JSON.stringify({ t: 'error', message: 'Too many direct friends are linked right now.' })}\n`);
+    socket.destroy();
+    return;
+  }
+
+  const partyId = cleanText(message.partyId, 80);
+  const currentPartyId = store.get().party?.id ?? '';
+  const invited = Boolean(partyId && currentPartyId && partyId === currentPartyId);
+  const saved = store.listFriends().find((friend) => friend.code === code);
+  const alreadyLinked = saved?.source === 'remote' || Boolean(saved?.remoteAddress && address && saved.remoteAddress === address);
+  const name = cleanText(message.name, 16) || `Fox ${code.slice(-3)}`;
+  const skin = sanitizeSkin(message.skin);
+
+  if (!invited && !alreadyLinked) {
+    pruneRemoteRequests();
+    const previousRequest = remoteRequests.get(code);
+    if (previousRequest && previousRequest.socket !== socket) previousRequest.socket.destroy();
+    remoteRequests.set(code, {
+      code,
+      name,
+      accountType: message.accountType === 'microsoft' ? 'microsoft' : 'offline',
+      skin,
+      address,
+      socket,
+      receivedAt: Date.now(),
+    });
+    sendRemoteHelloResult(socket, local, true);
+    emitUpdate('request');
+    return;
+  }
+
+  await promoteRemotePeer(code, socket, {
+    name,
+    accountType: message.accountType === 'microsoft' ? 'microsoft' : 'offline',
+    skin,
+    address,
+  });
+  sendRemoteHelloResult(socket, local, false);
+}
+
+/** Approves an unsolicited direct link after showing it inline to the user. */
+export async function acceptRemoteRequest(codeInput: string): Promise<Friend[]> {
+  const code = cleanCode(codeInput);
+  const request = code ? remoteRequests.get(code) : undefined;
+  if (!request || request.socket.destroyed) {
+    throw new Error('That direct friend request is no longer available');
+  }
+  const local = localRecords().find((record) => record.kind === 'friend');
+  if (!local) throw new Error('Choose an account before accepting a direct friend request');
+  remoteRequests.delete(code);
+  await promoteRemotePeer(code, request.socket, {
+    name: request.name,
+    accountType: request.accountType,
+    skin: request.skin,
+    address: request.address,
+  });
+  sendRemoteHelloResult(request.socket, local, false);
+  emitUpdate('request');
+  return store.listFriends();
+}
+
+export async function rejectRemoteRequest(codeInput: string): Promise<Friend[]> {
+  const code = cleanCode(codeInput);
+  const request = code ? remoteRequests.get(code) : undefined;
+  if (!request) return store.listFriends();
+  remoteRequests.delete(code);
+  request.socket.write(`${JSON.stringify({ t: 'remoteRejected', from: myCode() })}\n`);
+  request.socket.destroy();
+  emitUpdate('request');
+  return store.listFriends();
+}
+
+function handleVoice(message: Record<string, unknown>): void {
+  const from = cleanCode(message.from);
+  const session = calls.get(from);
+  const pcm = cleanText(message.pcm, 32_000);
+  if (!session || session.state !== 'connected' || !pcm || !getFriend(from)) return;
+  emitUpdate('signal', undefined, {
+    friendCode: from,
+    callId: cleanText(message.callId, 80),
+    data: { pcm },
+    from,
+  });
+}
+
+async function handleCall(message: Record<string, unknown>): Promise<void> {
+  const from = cleanCode(message.from);
   const callId = cleanText(message.callId, 80);
   const action = message.action;
-  if (!from || !callId || !getFriend(from)) return;
+  if (!from || !callId) return;
+  const peer = peers.get(`friend:${from}`);
+  if (!peer) return;
+  if (!getFriend(from)) await ensureFriend(from, peer, cleanText(message.name, 16));
   const session = calls.get(from);
   if (action === 'start') {
     if (session) {
-      const peer = peers.get(`friend:${from}`);
-      if (peer) sendDirect(peer, { t: 'call', action: 'reject', to: from, from: myCode(), callId });
+      sendDirect(peer, { t: 'call', action: 'reject', to: from, from: myCode(), callId });
       return;
     }
     calls.set(from, { callId, state: 'ringing', incoming: true });
@@ -460,8 +733,24 @@ function handleCall(message: Record<string, unknown>): void {
   }
 }
 
-function handleDirect(message: Record<string, unknown>): void {
+function handleDirect(message: Record<string, unknown>, socket?: net.Socket): void {
   if (message.instanceId === INSTANCE_ID) return;
+  if (message.t === 'remoteHello') {
+    void handleRemoteHello(message, socket);
+    return;
+  }
+  if (message.t === 'remoteHelloResult') return;
+  if (message.t === 'remoteRejected') {
+    const code = cleanCode(message.from);
+    const link = code ? remoteSockets.get(code) : undefined;
+    if (link) remoteSockets.delete(code);
+    if (code) peers.delete(`friend:${code}`);
+    void queueFriendWrite(async () => {
+      const friends = store.listFriends().filter((friend) => friend.code !== code && friend.id !== code);
+      await store.setFriends(friends);
+    }).then(() => emitUpdate('peers'));
+    return;
+  }
   if (alreadySeen(message)) return;
   const to = cleanText(message.to, 32);
   const isMine = normalizeShortCode(to, FRIEND_PREFIX) === myCode()
@@ -477,15 +766,25 @@ function handleDirect(message: Record<string, unknown>): void {
     const replyHost = cleanHost(message.replyHost);
     if (replyHost && !replyHosts.includes(replyHost)) replyHosts.unshift(replyHost);
     const replyPort = cleanPort(message.replyPort);
-    if (record && replyHosts.length && replyPort) {
-      sendDirect({ ...record, host: replyHosts[0], hosts: replyHosts, profilePort: replyPort }, {
+    const requester = cleanCode(message.from);
+    const replyRemote = Boolean(requester && remoteSockets.has(requester));
+    if (record && (replyRemote || replyHosts.length && replyPort)) {
+      const publicRecord = replyRemote ? redactedRecord(record) : record;
+      sendDirect({
+        ...publicRecord,
+        code: requester || record.code,
+        host: replyRemote ? 'remote.peer' : replyHosts[0] || record.host,
+        hosts: replyRemote ? [] : replyHosts,
+        profilePort: replyRemote ? REMOTE_SIGNAL_PORT : replyPort,
+        remote: replyRemote,
+      }, {
         t: 'profileResult',
         kind,
         to: message.from,
         from: myCode(),
         // Echo the exact code the requester asked for. Party codes are not friend codes.
         requestedCode: message.to,
-        record,
+        record: replyRemote ? { ...publicRecord, skin: record.skin } : record,
       });
     }
     return;
@@ -523,7 +822,11 @@ function handleDirect(message: Record<string, unknown>): void {
     return;
   }
   if (t === 'call') {
-    handleCall(message);
+    void handleCall(message);
+    return;
+  }
+  if (t === 'voice') {
+    handleVoice(message);
   }
 }
 
@@ -539,16 +842,7 @@ function handleUdp(message: Record<string, unknown>): void {
     return;
   }
   if (message.t === 'voice') {
-    const from = normalizeShortCode(cleanText(message.from, 32), FRIEND_PREFIX);
-    const session = calls.get(from);
-    const pcm = cleanText(message.pcm, 32_000);
-    if (!session || session.state !== 'connected' || !pcm || !getFriend(from)) return;
-    emitUpdate('signal', undefined, {
-      friendCode: from,
-      callId: cleanText(message.callId, 80),
-      data: { pcm },
-      from,
-    });
+    handleVoice(message);
   }
 }
 
@@ -556,6 +850,7 @@ export function startDiscovery(): void {
   if (udp || tcp) return;
   tcp = net.createServer((socket) => {
     socket.setEncoding('utf8');
+    socket.setKeepAlive(true, 15_000);
     let buffer = '';
     socket.on('data', (chunk: string) => {
       buffer += chunk;
@@ -568,17 +863,33 @@ export function startDiscovery(): void {
         const line = buffer.slice(0, newline);
         buffer = buffer.slice(newline + 1);
         const message = parseMessage(line);
-        if (message) handleDirect(message);
+        if (message) handleDirect(message, socket);
         newline = buffer.indexOf('\n');
       }
     });
+    socket.on('close', () => forgetRemoteSocket(socket));
     socket.on('error', () => socket.destroy());
   });
-  tcp.on('error', (error) => console.warn('[Friends] Direct TCP channel error:', error.message));
-  tcp.listen(0, '0.0.0.0', () => {
+  const fallbackToEphemeral = (error: NodeJS.ErrnoException) => {
+    if (error.code === 'EADDRINUSE' && tcp) {
+      tcp.removeListener('error', fallbackToEphemeral);
+      tcp.listen(0, '0.0.0.0', () => tcp?.on('error', (next) => {
+        console.warn('[Friends] Direct TCP channel error:', next.message);
+      }));
+      return;
+    }
+    console.warn('[Friends] Direct TCP channel error:', error.message);
+  };
+  tcp.once('error', fallbackToEphemeral);
+  tcp.once('listening', () => {
+    tcp?.removeListener('error', fallbackToEphemeral);
+    tcp?.on('error', (error) => console.warn('[Friends] Direct TCP channel error:', error.message));
     const address = tcp?.address();
     profilePort = address && typeof address === 'object' ? address.port : 0;
   });
+  // Prefer the fixed port a host can forward. Falling back keeps multiple
+  // launchers on one machine working, but a fallback port cannot be shared.
+  tcp.listen(REMOTE_SIGNAL_PORT, '0.0.0.0');
 
   udp = dgram.createSocket({ type: 'udp4', reuseAddr: true });
   udp.on('message', (data) => {
@@ -616,6 +927,12 @@ export function stopDiscovery(): void {
     tcp = null;
   }
   profilePort = 0;
+  for (const socket of remoteSockets.values()) {
+    try { socket.destroy(); } catch { /* already closed */ }
+  }
+  remoteSockets.clear();
+  remoteRequests.clear();
+  linkAttempts.clear();
   peers.clear();
   calls.clear();
   for (const waiters of profileWaiters.values()) {
@@ -635,6 +952,7 @@ export function listFriendPeers(): FriendPeer[] {
       host: peer.host,
       port: peer.port,
       lastSeen: peer.lastSeen,
+      remote: peer.remote,
     }));
 }
 
@@ -647,8 +965,14 @@ async function requireFriendPeer(code: string): Promise<StoredPeer> {
   const normalized = normalizeShortCode(code, FRIEND_PREFIX);
   const existing = peers.get(`friend:${normalized}`);
   if (existing) return existing;
+  const saved = store.listFriends().find((friend) => friend.code === normalized || friend.id === normalized);
+  if (saved?.remoteAddress) {
+    await linkRemoteFriend(normalized, saved.remoteAddress);
+    const linked = peers.get(`friend:${normalized}`);
+    if (linked) return linked;
+  }
   const found = await waitForPeer('friend', normalized, 4000);
-  if (!found) throw new Error('That friend is not on this LAN right now');
+  if (!found) throw new Error('That friend is not reachable right now. Share your public address and try again.');
   return found;
 }
 
@@ -674,6 +998,167 @@ async function waitForPeer(kind: WireRecord['kind'], code: string, timeoutMs: nu
     off = () => { events.off('friends', handler); };
     const timer = setTimeout(() => finish(null), timeoutMs);
     sendUdp({ t: 'query', kind, code }, undefined, true);
+  });
+}
+
+/** Actual TCP port this launcher can accept. It is the fixed port unless already in use. */
+export function remoteSignalPort(): number {
+  return profilePort;
+}
+
+export function getRemoteSignalAddress(): string {
+  return store.getRemoteSignalAddress();
+}
+
+/** Saves the public host:port peers may dial, only if this launcher owns that port. */
+export async function setRemoteSignalAddress(
+  addressInput: string,
+  portInput?: number,
+): Promise<string> {
+  const target = parseRemoteAddress(portInput === undefined ? addressInput : `${parseRemoteAddress(addressInput).host}:${portInput}`);
+  const bound = remoteSignalPort();
+  if (bound && target.port !== bound) {
+    throw new Error(
+      `Direct friend port ${target.port} is not free on this device. Fox Launcher is listening on ${bound}; ` +
+      'close the other program and restart before forwarding that port.',
+    );
+  }
+  const formatted = formatDirectEndpoint(target);
+  await store.setRemoteSignalAddress(formatted);
+  emitUpdate('identity');
+  return formatted;
+}
+
+/**
+ * Links two launchers through a public host:port the user owns. The connection
+ * is direct; no relay, tunnel, router API, or hosted service is contacted.
+ * A `partyId` proves the caller holds the current invite and avoids a pending request.
+ */
+export async function linkRemoteFriend(
+  codeInput: string,
+  addressInput: string,
+  partyIdInput?: string,
+): Promise<'linked' | 'pending'> {
+  const code = cleanCode(codeInput);
+  if (!code) throw new Error('That friend code is damaged or was changed');
+  const target = parseRemoteAddress(addressInput);
+  const local = localRecords().find((record) => record.kind === 'friend');
+  if (!local) throw new Error('Choose an account before linking a remote friend');
+
+  const existingSocket = remoteSockets.get(code);
+  if (existingSocket && !existingSocket.destroyed) {
+    return peers.has(`friend:${code}`) ? 'linked' : 'pending';
+  }
+  if (existingSocket) {
+    remoteSockets.delete(code);
+    peers.delete(`friend:${code}`);
+  }
+
+  return new Promise((resolve, reject) => {
+    const socket = net.connect(target.port, target.host);
+    let settled = false;
+    let linked = false;
+    let buffer = '';
+    socket.setEncoding('utf8');
+    socket.setKeepAlive(true, 15_000);
+    socket.setTimeout(7000);
+
+    const finish = (status: 'linked' | 'pending', error?: Error) => {
+      if (settled) return;
+      settled = true;
+      socket.setTimeout(0);
+      if (error) reject(error);
+      else resolve(status);
+    };
+
+    socket.on('connect', () => {
+      socket.write(`${JSON.stringify(directPayload({
+        t: 'remoteHello',
+        code: local.code,
+        name: local.name,
+        accountType: local.accountType,
+        skin: local.skin,
+        remoteAddress: store.getRemoteSignalAddress() || undefined,
+        partyId: cleanText(partyIdInput, 80) || undefined,
+      }))}\n`);
+    });
+    socket.on('data', (chunk: string) => {
+      buffer += chunk;
+      if (buffer.length > MAX_PACKET) {
+        socket.destroy();
+        return;
+      }
+      let newline = buffer.indexOf('\n');
+      while (newline >= 0) {
+        const line = buffer.slice(0, newline).trim();
+        buffer = buffer.slice(newline + 1);
+        const message = parseMessage(line);
+        newline = buffer.indexOf('\n');
+        if (!message) continue;
+        if (message.t === 'error') {
+          finish('pending', new Error(cleanText(message.message, 200) || 'The remote friend rejected the link'));
+          return;
+        }
+        if (message.t === 'remoteRejected') {
+          if (linked) {
+            remoteSockets.delete(code);
+            peers.delete(`friend:${code}`);
+            void queueFriendWrite(async () => {
+              const friends = store.listFriends().filter((friend) => friend.code !== code && friend.id !== code);
+              await store.setFriends(friends);
+            }).then(() => emitUpdate('peers'));
+          }
+          finish('pending', new Error('The remote friend rejected your link request'));
+          return;
+        }
+        if (message.t !== 'remoteHelloResult') {
+          // The same persistent socket carries chat, calls, and voice after linking.
+          handleDirect(message, socket);
+          continue;
+        }
+        if (message.pending === true) {
+          remoteSockets.set(code, socket);
+          finish('pending');
+          continue;
+        }
+        const record = sanitizeRecord({
+          ...(message.record as Record<string, unknown> | undefined),
+          host: target.host,
+          hosts: [target.host],
+          port: target.port,
+          profilePort: target.port,
+        });
+        if (!record || record.code !== code) {
+          finish('pending', new Error('The remote friend sent an invalid profile'));
+          return;
+        }
+        const peer: StoredPeer = {
+          ...record,
+          host: target.host,
+          hosts: [target.host],
+          profilePort: target.port,
+          lastSeen: Date.now(),
+          remote: true,
+          // Only the address the user typed is trusted for future reconnects.
+          remoteAddress: formatDirectEndpoint(target),
+        };
+        peers.set(`friend:${code}`, peer);
+        remoteSockets.set(code, socket);
+        linked = true;
+        void ensureFriend(code, peer, record.name);
+        emitUpdate('peers');
+        finish('linked');
+      }
+    });
+    socket.on('timeout', () => finish('pending', new Error('The remote friend did not answer in time')));
+    socket.on('error', (error) => {
+      if (!settled) finish('pending', error);
+      else forgetRemoteSocket(socket);
+    });
+    socket.on('close', () => {
+      if (!settled) finish('pending', new Error('The remote friend closed the connection'));
+      else forgetRemoteSocket(socket);
+    });
   });
 }
 
@@ -779,10 +1264,13 @@ export async function sendVoice(friendCode: string, pcm: string, callId: string)
   if (!session || session.state !== 'connected' || session.callId !== callId) {
     throw new Error('Start or accept the call before speaking');
   }
-  sendUdp(
-    { t: 'voice', to: code, from: myCode(), callId, pcm: pcm.slice(0, 32_000) },
-    peer.hosts?.length ? peer.hosts : peer.host,
-  );
+  const payload = { t: 'voice', to: code, from: myCode(), callId, pcm: pcm.slice(0, 32_000) };
+  if (peer.remote || remoteSockets.has(code)) {
+    // Remote voice travels on the same direct TCP link as chat and call controls.
+    sendDirect(peer, payload);
+    return;
+  }
+  sendUdp(payload, peer.hosts?.length ? peer.hosts : peer.host);
 }
 
 export function isCallConnected(friendCode: string): boolean {

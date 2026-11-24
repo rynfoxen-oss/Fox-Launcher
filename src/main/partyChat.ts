@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import * as net from 'net';
 import { FRIEND_PREFIX, normalizeShortCode, verifyShortCode } from './codes';
 import { events } from './events';
-import { lanHostAddresses, localPartyAddress } from './partyNetwork';
+import { lanHostAddresses, localPartyAddress, parseDirectEndpoint } from './partyNetwork';
 import { publicPartyMember } from './partyIdentity';
 import type {
   Party,
@@ -43,6 +43,8 @@ let mode: 'offline' | 'host' | 'guest' = 'offline';
 let hub: net.Server | null = null;
 let client: net.Socket | null = null;
 let partyId = '';
+/** Public direct-address parties cannot know each other's generated party id. */
+let acceptAnyParty = false;
 let self: PartyMember | null = null;
 let hooks: ChatHooks | null = null;
 let roster = new Map<string, PartyMember>();
@@ -127,6 +129,8 @@ function sanitizeMember(value: unknown): PartyMember | null {
     status: raw.status === 'host' || raw.status === 'incompatible' ? raw.status : 'ready',
     skin: sanitizeSkin(raw.skin),
     presence,
+    friendHost: parseDirectEndpoint(`${raw.friendHost ?? ''}:${raw.friendPort ?? ''}`)?.host,
+    friendPort: parseDirectEndpoint(`${raw.friendHost ?? ''}:${raw.friendPort ?? ''}`)?.port,
   };
 }
 
@@ -159,7 +163,7 @@ function processLine(line: string, from: 'peer' | 'client', peer?: Peer): void {
   } catch {
     return;
   }
-  if (message.partyId && message.partyId !== partyId) return;
+  if (message.partyId && message.partyId !== partyId && !acceptAnyParty) return;
 
   if (from === 'peer' && peer) {
     if (message.type === 'hello') {
@@ -189,6 +193,17 @@ function processLine(line: string, from: 'peer' | 'client', peer?: Peer): void {
       messages = [...messages, entry].slice(-MAX_LINES);
       broadcast({ type: 'message', partyId, message: entry });
       emit('message');
+    } else if (message.type === 'profile' && peer.member) {
+      const endpoint = parseDirectEndpoint(`${message.friendHost ?? ''}:${message.friendPort ?? ''}`);
+      const updated: PartyMember = {
+        ...peer.member,
+        friendHost: endpoint?.host,
+        friendPort: endpoint?.port,
+      };
+      peer.member = updated;
+      roster.set(memberKey(updated), updated);
+      broadcast({ type: 'roster', partyId, members: [...roster.values()] });
+      emit('roster');
     } else if (message.type === 'presence' && peer.member) {
       const updated: PartyMember = {
         ...peer.member,
@@ -212,7 +227,12 @@ function processLine(line: string, from: 'peer' | 'client', peer?: Peer): void {
       ? message.messages.map(sanitizeMessage).filter((item): item is PartyMessage => Boolean(item)).slice(-MAX_LINES)
       : [];
     reconnectAttempts = 0;
-    status = { status: 'connected', message: 'Connected to the host’s party chat.', onlineCount: countOnline() };
+    status = {
+      status: 'connected',
+      message: 'Connected to the host’s party chat.',
+      address: status.address,
+      onlineCount: countOnline(),
+    };
     emit('roster');
   } else if (message.type === 'roster') {
     const incoming = Array.isArray(message.members)
@@ -358,8 +378,8 @@ function openClient(expectedGeneration: number): void {
       status = {
         status: 'error',
         message: lastError
-          ? `Could not reach the host’s chat on the LAN: ${lastError}`
-          : 'Could not reach the host’s chat on the LAN.',
+          ? `Could not reach the host’s chat: ${lastError}`
+          : 'Could not reach the host’s chat.',
         onlineCount: countOnline(),
       };
       emit('state');
@@ -491,6 +511,25 @@ export function setPartyPresence(presence: PartyPresence): void {
   }
 }
 
+/** Allows direct host:port joins that cannot know the host's generated party id. */
+export function allowRemoteChatJoins(enabled: boolean): void {
+  acceptAnyParty = enabled;
+}
+
+/** Publishes this player's direct endpoint to the whole party roster inline. */
+export function setPartyChatRemoteEndpoint(host: string | undefined, port: number | undefined): void {
+  if (!self || mode === 'offline') return;
+  const updated: PartyMember = { ...self, friendHost: host, friendPort: port };
+  self = updated;
+  roster.set(memberKey(updated), updated);
+  if (mode === 'host') {
+    broadcast({ type: 'roster', partyId, members: [...roster.values()] });
+  } else if (client && !client.destroyed) {
+    writeJson(client, { type: 'profile', partyId, friendHost: host, friendPort: port });
+  }
+  emit('roster');
+}
+
 export function partyChatSnapshot(): PartyChatUpdate {
   return {
     state: { ...status, onlineCount: countOnline() },
@@ -514,6 +553,7 @@ export function stopPartyChat(): void {
   }
   mode = 'offline';
   partyId = '';
+  acceptAnyParty = false;
   self = null;
   hooks = null;
   config = null;

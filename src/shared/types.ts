@@ -77,6 +77,9 @@ export interface PartyMember {
   status: 'host' | 'ready' | 'incompatible';
   skin?: PartySkin;
   presence?: PartyPresence;
+  /** Public host:port where this player accepts direct friend chat/call/voice links. */
+  friendHost?: string;
+  friendPort?: number;
 }
 
 export interface PartyMod {
@@ -132,7 +135,9 @@ export interface Friend {
   presence: PartyPresence;
   addedAt: number;
   lastSeen: number;
-  source: 'code' | 'party';
+  source: 'code' | 'party' | 'remote';
+  /** Public host:port used for direct chat/voice when the friend is outside the LAN. */
+  remoteAddress?: string;
 }
 
 /** A friend message stored locally and relayed directly over the LAN. */
@@ -156,6 +161,8 @@ export interface FriendPeer {
   port: number;
   lastSeen: number;
   skin?: PartySkin;
+  /** True when this peer uses a host-owned public endpoint instead of LAN discovery. */
+  remote?: boolean;
 }
 
 export type FriendCallAction = 'start' | 'accept' | 'reject' | 'end';
@@ -174,10 +181,21 @@ export interface FriendSignal {
   from: string;
 }
 
+/** Unsolicited direct link request. Never accepted without inline user approval. */
+export interface RemoteFriendRequest {
+  code: string;
+  name: string;
+  accountType: Account['type'];
+  skin?: PartySkin;
+  address: string;
+  receivedAt: number;
+}
+
 export interface FriendsUpdate {
-  event: 'peers' | 'message' | 'call' | 'signal' | 'identity';
+  event: 'peers' | 'message' | 'call' | 'signal' | 'identity' | 'request';
   peers: FriendPeer[];
   messages: FriendMessage[];
+  requests: RemoteFriendRequest[];
   call?: FriendCallEvent;
   signal?: FriendSignal;
 }
@@ -196,8 +214,12 @@ export interface Party {
   name: string;
   /** Short FOXP- code resolved through LAN discovery. */
   shortCode?: string;
-  /** Optional VPN/manual address set by the host for friends outside the LAN. */
+  /** Optional public address set by the host for friends outside the LAN. */
   remoteAddress?: string;
+  /** Public direct friend signal endpoint published with a remote party. */
+  remoteSignalPort?: number;
+  friendHost?: string;
+  friendPort?: number;
   inviteCode: string;
   serverHost: string;
   serverPort?: number;
@@ -236,6 +258,9 @@ export interface PartyInvite {
   chatHost?: string;
   chatHosts?: string[];
   chatPort?: number;
+  /** Host-owned public endpoint for friend chat/call/voice signaling. */
+  friendHost?: string;
+  friendPort?: number;
   minecraftVersion: string;
   loader: ModLoader;
   loaderVersion?: string;
@@ -699,8 +724,8 @@ export interface IpcApi {
     current(): Promise<Party | null>;
     create(input: PartyCreateInput): Promise<Party>;
     join(inviteCode: string, preferredInstanceId?: string): Promise<PartyJoinResult>;
-    joinByAddress(address: string, preferredInstanceId?: string): Promise<PartyJoinResult>;
-    setRemoteAddress(address: string, chatPort?: number): Promise<Party>;
+    joinByAddress(address: string, preferredInstanceId?: string, chatPort?: number, signalPort?: number): Promise<PartyJoinResult>;
+    setRemoteAddress(address: string, chatPort?: number, signalPort?: number): Promise<Party>;
     selectInstance(instanceId: string): Promise<PartyJoinResult>;
     leave(): Promise<void>;
     /** Pollable host-side server progress; no popup is ever shown. */
@@ -716,6 +741,13 @@ export interface IpcApi {
     myCode(): Promise<string>;
     peers(): Promise<FriendPeer[]>;
     addCode(code: string): Promise<Friend[]>;
+    /** Returns 'linked' or 'pending' when the remote user must approve first. */
+    addRemoteCode(code: string, address: string): Promise<{ friends: Friend[]; status: 'linked' | 'pending' }>;
+    remoteRequests(): Promise<RemoteFriendRequest[]>;
+    acceptRemoteRequest(code: string): Promise<Friend[]>;
+    rejectRemoteRequest(code: string): Promise<Friend[]>;
+    publicAddress(): Promise<string>;
+    setPublicAddress(address: string, port?: number): Promise<string>;
     addPartyMember(member: PartyMember): Promise<Friend[]>;
     remove(id: string): Promise<Friend[]>;
     rename(id: string, name: string): Promise<Friend[]>;

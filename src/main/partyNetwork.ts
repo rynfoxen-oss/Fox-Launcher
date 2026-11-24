@@ -13,6 +13,30 @@ export interface PartyAddresses {
 const VIRTUAL_ADAPTER = /vpn|radmin|hamachi|zerotier|tailscale|wireguard|openvpn|tun|tap|virtualbox|vmware|hyper-v|vethernet|docker|^local area connection\*/i;
 const MAX_HOSTS = 12;
 
+/** Fixed TCP port the host may forward for direct friend chat, calls, and voice. */
+export const REMOTE_SIGNAL_PORT = 37822;
+
+export interface DirectEndpoint {
+  host: string;
+  port: number;
+}
+
+/** Strict host:port parser. Only DNS names and IPv4 addresses are accepted. */
+export function parseDirectEndpoint(value: unknown, defaultPort?: number): DirectEndpoint | null {
+  if (typeof value !== 'string') return null;
+  const raw = value.trim().slice(0, 300);
+  if (!raw) return null;
+  const match = /^([A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)(?::(\d{1,5}))?$/.exec(raw);
+  if (!match || match[1].includes('..')) return null;
+  const port = match[2] ? Number(match[2]) : defaultPort;
+  if (!Number.isInteger(port) || !port || port > 65_535) return null;
+  return { host: match[1].toLowerCase(), port };
+}
+
+export function formatDirectEndpoint(endpoint: DirectEndpoint): string {
+  return `${endpoint.host}:${endpoint.port}`;
+}
+
 interface NetworkInterface {
   name: string;
   address: string;

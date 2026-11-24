@@ -1,3 +1,24 @@
+# Fox Launcher 1.3.0
+
+This release adds manual public `host:port` play for people outside your LAN. The host owns and forwards the ports; Fox Launcher never opens router ports, uses UPnP/IGD, runs a relay, or contacts a third-party tunnel service. LAN play and all existing short codes keep working. If you do not have a public `host:port`, share short codes only on the same LAN or over a VPN you set up yourself.
+
+## What's new
+
+- **Public direct play:** the host can publish a public `host:port` for the Minecraft server, chat, and direct friend links. Friends can join with the long `FOXP2.` invite or paste the public `host:port` directly.
+- **Party chat and voice outside LAN:** party chat, friend chat, call signaling, and voice now travel over the same direct TCP link when a friend is outside the LAN. LAN voice still uses the local network.
+- **Safer remote friend links:** `FOX-XXXXXX` codes stay identity-only. Unsolicited remote link requests stay pending until the recipient approves them inline; rejects close the connection. Remote links are capped and rate-limited, LAN addresses are redacted from remote replies, and only the public address you typed is stored for reconnects.
+- **Manual setup only:** the Party page lists the exact ports to forward yourself: game `25565` (TCP/UDP), chat `25566` (TCP), and direct friend/chat/call link `37822` (TCP). The launcher verifies the direct port is actually bound before publishing it.
+- **No pop-ups:** remote setup results, pending requests, and errors are shown inline on the Party and Friends pages.
+
+## Downloads
+
+- Windows: `Fox.Launcher.Setup.1.3.0.exe`
+- macOS — Apple Silicon: `Fox-Launcher-1.3.0-mac-arm64.zip`
+- macOS — Intel: `Fox-Launcher-1.3.0-mac-x64.zip`
+- macOS — guided installer: `Fox-Launcher-1.3.0-mac-setup.zip`
+
+## Previous release
+
 # Fox Launcher 1.2.5
 
 This is a stability hotfix for 1.2.4. LAN friends, party chat, and hosted servers keep working without VPN; friends outside the LAN still need a VPN or manual network setup you control. No third-party tunnel, hosted chat service, or router port opening is used.

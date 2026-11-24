@@ -33,6 +33,8 @@ export interface LauncherData {
   friends: Friend[];
   /** Local direct messages; never sent to a server. */
   friendMessages: FriendMessage[];
+  /** Optional public host:port this user forwards for direct friend links. */
+  remoteSignalAddress?: string;
   selectedAccountId?: string;
 }
 
@@ -81,6 +83,7 @@ function defaultData(): LauncherData {
     party: null,
     friends: [],
     friendMessages: [],
+    remoteSignalAddress: '',
   };
 }
 
@@ -203,6 +206,9 @@ class Store {
         party: isPlainObject(parsed.party) ? parsed.party as unknown as Party : null,
         friends: Array.isArray(parsed.friends) ? parsed.friends as unknown as Friend[] : [],
         friendMessages: Array.isArray(parsed.friendMessages) ? parsed.friendMessages as unknown as FriendMessage[] : [],
+        remoteSignalAddress: typeof parsed.remoteSignalAddress === 'string'
+          ? parsed.remoteSignalAddress.slice(0, 300)
+          : '',
         selectedAccountId,
       };
     } catch (error) {
@@ -393,6 +399,15 @@ class Store {
 
   async setFriendMessages(messages: FriendMessage[]): Promise<void> {
     this.data.friendMessages = messages;
+    await this.save();
+  }
+
+  getRemoteSignalAddress(): string {
+    return this.data.remoteSignalAddress ?? '';
+  }
+
+  async setRemoteSignalAddress(address: string): Promise<void> {
+    this.data.remoteSignalAddress = address.trim().slice(0, 300);
     await this.save();
   }
 
