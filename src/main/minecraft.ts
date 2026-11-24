@@ -109,6 +109,8 @@ interface RunningLaunch {
 }
 
 let running: RunningLaunch | null = null;
+/** Set before the first await so two rapid clicks cannot start duplicate JVMs. */
+let launchPending = false;
 let lastLaunchLogs: LaunchLogLine[] = [];
 let currentState: LaunchState = { status: 'idle' };
 let manifestCache: { data: VersionManifest; at: number } | null = null;
@@ -260,13 +262,19 @@ function isNativeClassifier(classifier: string | undefined): boolean {
 function nativeClassifierAllowed(classifier: string): boolean {
   const value = classifier.toLowerCase();
   const arm = process.arch === 'arm64';
+  const x86 = process.arch === 'ia32';
+
+  const isArm64 = /arm64|aarch64/.test(value);
+  const is64Bit = /x86[_-]?64|x64|amd64/.test(value);
+  // `x86` alone means 32-bit. Checking it after x86_64/x64 keeps modern
+  // classifiers such as `natives-windows-x86` from overwriting 64-bit DLLs.
+  const is32Bit = /x86[_-]?32|i[3-6]86|ia32|arm32|x86(?!_?64)/.test(value);
 
   if (process.platform === 'darwin') {
     if (!value.includes('macos') && !value.includes('osx')) return false;
-    // LWJGL ships separate x64 and arm64 dylibs with the same file names.
-    // Loading both into one natives directory makes whichever is copied last win.
-    if (value.includes('arm64') || value.includes('aarch64')) return arm;
-    if (value.includes('x86_64') || value.includes('x64') || value.includes('x86')) return !arm;
+    if (isArm64) return arm;
+    if (is64Bit) return !arm;
+    if (is32Bit) return false;
     // Old LWJGL 2 builds use `natives-osx` and ship universal binaries. Only
     // the newer `natives-macos*` classifiers have separate x64/arm64 builds.
     if (value.includes('osx')) return true;
@@ -277,14 +285,16 @@ function nativeClassifierAllowed(classifier: string): boolean {
 
   if (process.platform === 'win32') {
     if (!value.includes('windows')) return false;
-    if (value.includes('arm64') || value.includes('aarch64')) return arm;
-    if (value.includes('x86_32') || value.includes('arm32')) return process.arch === 'ia32';
+    if (isArm64) return arm;
+    if (is64Bit) return !x86;
+    if (is32Bit) return x86;
     return true;
   }
 
   if (!value.includes('linux') && !value.includes('freebsd')) return false;
-  if (value.includes('arm64') || value.includes('aarch64')) return arm;
-  if (value.includes('x86_32') || value.includes('arm32')) return process.arch === 'ia32';
+  if (isArm64) return arm;
+  if (is64Bit) return !x86;
+  if (is32Bit) return x86;
   return true;
 }
 
@@ -948,7 +958,16 @@ export async function restoreLaunchSnapshot(instanceId: string): Promise<LaunchS
 }
 
 export async function launchInstance(instanceId: string, options?: { join?: PartyJoin }): Promise<void> {
-  if (running) throw new Error('A game is already running');
+  if (running || launchPending) throw new Error('A game is already launching or running');
+  launchPending = true;
+  try {
+    await launchInstanceInternal(instanceId, options);
+  } finally {
+    launchPending = false;
+  }
+}
+
+async function launchInstanceInternal(instanceId: string, options?: { join?: PartyJoin }): Promise<void> {
   const instance = store.get().instances.find((item) => item.id === instanceId);
   if (!instance) throw new Error('Instance not found');
   const account = store.currentAccount();

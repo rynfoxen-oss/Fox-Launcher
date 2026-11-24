@@ -1,7 +1,6 @@
 import { randomUUID } from 'crypto';
 import * as dgram from 'dgram';
 import * as net from 'net';
-import * as os from 'os';
 import {
   FRIEND_PREFIX,
   PARTY_PREFIX,
@@ -12,10 +11,11 @@ import {
 } from './codes';
 import { events } from './events';
 import { currentPartyMember } from './partyIdentity';
-import { localPartyAddress } from './partyNetwork';
+import { lanBroadcastTargets, lanHostAddresses, lanUnicastTargets } from './partyNetwork';
 import { store } from './store';
 import type {
   Account,
+  Friend,
   FriendCallEvent,
   FriendMessage,
   FriendPeer,
@@ -25,11 +25,14 @@ import type {
 } from '../shared/types';
 
 const UDP_PORT = 37821;
-const PEER_TIMEOUT = 15_000;
+const PEER_TIMEOUT = 20_000;
 const ANNOUNCE_INTERVAL = 4_000;
 const MAX_PACKET = 2_500_000;
 const MAX_MESSAGES = 300;
 const MAX_SKIN_DATA = 120_000;
+const MAX_FRIENDS = 100;
+const MAX_HOSTS = 12;
+const SEEN_TTL = 60_000;
 const INSTANCE_ID = randomUUID();
 
 interface WireRecord {
@@ -38,12 +41,15 @@ interface WireRecord {
   name: string;
   accountType: Account['type'];
   host: string;
+  /** Every LAN address this peer can be reached on. Never includes VPN adapters. */
+  hosts?: string[];
   port: number;
   profilePort: number;
 }
 
 interface StoredPeer extends WireRecord {
   lastSeen: number;
+  skin?: PartySkin;
 }
 
 interface FullRecord extends WireRecord {
@@ -61,16 +67,44 @@ const peers = new Map<string, StoredPeer>();
 const calls = new Map<string, CallSession>();
 const profileWaiters = new Map<string, Array<(record: FullRecord | null) => void>>();
 const lastProfileFetch = new Map<string, number>();
+const seenMessages = new Map<string, number>();
+let friendWrites: Promise<void> = Promise.resolve();
 
 let udp: dgram.Socket | null = null;
 let tcp: net.Server | null = null;
 let announceTimer: NodeJS.Timeout | null = null;
 let profilePort = 0;
-let cachedHost = '';
 
-function hostAddress(): string {
-  if (!cachedHost) cachedHost = localPartyAddress();
-  return cachedHost;
+function localHosts(): string[] {
+  return lanHostAddresses();
+}
+
+function messageKey(message: Record<string, unknown>): string {
+  const id = cleanText(message.id, 80);
+  return id ? `${cleanText(message.instanceId, 80)}:${id}` : '';
+}
+
+function alreadySeen(message: Record<string, unknown>): boolean {
+  const key = messageKey(message);
+  if (!key) return false;
+  const now = Date.now();
+  for (const [stored, time] of seenMessages) {
+    if (now - time > SEEN_TTL) seenMessages.delete(stored);
+  }
+  if (seenMessages.has(key)) return true;
+  seenMessages.set(key, now);
+  return false;
+}
+
+function directPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  return { ...payload, id: payload.id ?? randomUUID(), instanceId: INSTANCE_ID };
+}
+
+/** Keep simultaneous profile/presence/chat updates from overwriting each other. */
+function queueFriendWrite(operation: () => Promise<void>): Promise<void> {
+  const next = friendWrites.catch(() => undefined).then(operation);
+  friendWrites = next.catch(() => undefined);
+  return next;
 }
 
 function cleanText(value: unknown, max: number): string {
@@ -86,29 +120,6 @@ function cleanHost(value: unknown): string {
 function cleanPort(value: unknown): number {
   const port = Number(value);
   return Number.isInteger(port) && port > 0 && port < 65_536 ? port : 0;
-}
-
-/** Broadcast globally and on each local subnet; some adapters ignore 255.255.255.255. */
-function broadcastTargets(): string[] {
-  const targets = new Set<string>(['255.255.255.255']);
-  for (const addresses of Object.values(os.networkInterfaces())) {
-    for (const item of addresses ?? []) {
-      if (item.family !== 'IPv4' || item.internal || !item.cidr) continue;
-      const [ip, bitsText] = item.cidr.split('/');
-      const bits = Number(bitsText);
-      if (!ip || !Number.isInteger(bits) || bits < 1 || bits > 30) continue;
-      const ipValue = ip.split('.').reduce((value, part) => (value * 256 + Number(part)) >>> 0, 0);
-      const mask = bits === 32 ? 0xffffffff : (~((1 << (32 - bits)) - 1)) >>> 0;
-      const broadcast = (ipValue | (~mask >>> 0)) >>> 0;
-      targets.add([
-        (broadcast >>> 24) & 255,
-        (broadcast >>> 16) & 255,
-        (broadcast >>> 8) & 255,
-        broadcast & 255,
-      ].join('.'));
-    }
-  }
-  return [...targets];
 }
 
 function boundedDataUrl(value: unknown): string {
@@ -141,6 +152,10 @@ function sanitizeRecord(value: unknown): FullRecord | null {
   const code = normalizeShortCode(cleanText(raw.code, 32), prefix);
   if (!verifyShortCode(code, prefix)) return null;
   const host = cleanHost(raw.host);
+  const hosts = Array.isArray(raw.hosts)
+    ? raw.hosts.map(cleanHost).filter(Boolean).slice(0, MAX_HOSTS)
+    : [];
+  if (host && !hosts.includes(host)) hosts.unshift(host);
   const port = cleanPort(raw.port);
   const profilePort = cleanPort(raw.profilePort);
   if (!host || !port || !profilePort) return null;
@@ -150,6 +165,7 @@ function sanitizeRecord(value: unknown): FullRecord | null {
     name: cleanText(raw.name, 16) || `Fox ${code.slice(-3)}`,
     accountType: raw.accountType === 'microsoft' ? 'microsoft' : 'offline',
     host,
+    hosts: hosts.slice(0, MAX_HOSTS),
     port,
     profilePort,
     skin: sanitizeSkin(raw.skin),
@@ -166,13 +182,15 @@ function toWire(record: FullRecord): WireRecord {
     name: record.name,
     accountType: record.accountType,
     host: record.host,
+    hosts: record.hosts,
     port: record.port,
     profilePort: record.profilePort,
   };
 }
 
 function localRecords(): FullRecord[] {
-  const host = hostAddress();
+  const hosts = localHosts();
+  const host = hosts[0] ?? '127.0.0.1';
   const records: FullRecord[] = [];
   const account = store.currentAccount();
   if (account && profilePort) {
@@ -183,6 +201,7 @@ function localRecords(): FullRecord[] {
       name: account.name.slice(0, 16),
       accountType: account.type,
       host,
+      hosts,
       port: UDP_PORT,
       profilePort,
       skin: member?.skin,
@@ -196,6 +215,7 @@ function localRecords(): FullRecord[] {
       name: party.name,
       accountType: account?.type ?? 'offline',
       host,
+      hosts,
       port: UDP_PORT,
       profilePort,
       inviteCode: party.inviteCode,
@@ -222,6 +242,7 @@ function emitUpdate(
   signal?: FriendsUpdate['signal'],
 ): void {
   prunePeers();
+  void syncFriendPresence();
   events.friends({
     event,
     peers: listFriendPeers(),
@@ -241,35 +262,52 @@ function parseMessage(raw: string): Record<string, unknown> | null {
   }
 }
 
-function sendUdp(payload: Record<string, unknown>, host?: string): void {
+function targetHosts(hosts: unknown): string[] {
+  const list = Array.isArray(hosts) ? hosts : typeof hosts === 'string' ? [hosts] : [];
+  return [...new Set(list.map(cleanHost).filter(Boolean))];
+}
+
+function sendUdp(payload: Record<string, unknown>, hosts?: string | string[], sweep = false): void {
   if (!udp) return;
-  const targets = host ? [host] : broadcastTargets();
-  const data = Buffer.from(JSON.stringify({ ...payload, instanceId: INSTANCE_ID }));
-  for (const target of targets) {
+  const targets = hosts
+    ? targetHosts(hosts)
+    : sweep
+      ? [...lanBroadcastTargets(), ...lanUnicastTargets()]
+      : lanBroadcastTargets();
+  const data = Buffer.from(JSON.stringify(directPayload(payload)));
+  const unique = [...new Set(targets)];
+  for (const target of unique) {
     try {
       udp.send(data, UDP_PORT, target);
     } catch {
-      // A virtual adapter may reject one broadcast; other adapters still receive it.
+      // One adapter may reject a packet; the other LAN targets still receive it.
     }
   }
 }
 
-function sendDirect(peer: Pick<StoredPeer, 'host' | 'profilePort'>, payload: Record<string, unknown>): void {
+function sendDirect(
+  peer: Pick<StoredPeer, 'host' | 'hosts' | 'profilePort'>,
+  payload: Record<string, unknown>,
+): void {
   if (!tcp) return;
-  const socket = net.connect(peer.profilePort, peer.host);
-  socket.setTimeout(1800);
-  socket.on('connect', () => {
-    socket.write(`${JSON.stringify({ ...payload, instanceId: INSTANCE_ID })}\n`);
-    socket.end();
-  });
-  socket.on('error', () => socket.destroy());
-  socket.on('timeout', () => socket.destroy());
+  const encoded = `${JSON.stringify(directPayload(payload))}\n`;
+  const hosts = targetHosts(peer.hosts?.length ? peer.hosts : peer.host);
+  for (const host of hosts) {
+    const socket = net.connect(peer.profilePort, host);
+    socket.setTimeout(2500);
+    socket.on('connect', () => {
+      socket.write(encoded);
+      socket.end();
+    });
+    socket.on('error', () => socket.destroy());
+    socket.on('timeout', () => socket.destroy());
+  }
 }
 
-function sendAnnounce(code?: string): void {
+function sendAnnounce(code?: string, sweep = false): void {
   const records = localRecords().filter((record) => !code || record.code === code);
   if (!records.length) return;
-  sendUdp({ t: 'announce', records: records.map(toWire) });
+  sendUdp({ t: 'announce', records: records.map(toWire) }, undefined, sweep);
 }
 
 async function fetchProfile(peer: StoredPeer): Promise<FullRecord | null> {
@@ -278,12 +316,14 @@ async function fetchProfile(peer: StoredPeer): Promise<FullRecord | null> {
     const pending = profileWaiters.get(key) ?? [];
     pending.push(resolve);
     profileWaiters.set(key, pending);
+    const replyHosts = localHosts();
     sendDirect(peer, {
       t: 'profile',
       kind: peer.kind,
       to: peer.code,
       from: myCode(),
-      replyHost: hostAddress(),
+      replyHost: replyHosts[0] ?? '127.0.0.1',
+      replyHosts,
       replyPort: profilePort,
     });
     setTimeout(() => {
@@ -291,7 +331,7 @@ async function fetchProfile(peer: StoredPeer): Promise<FullRecord | null> {
       if (!current.includes(resolve)) return;
       profileWaiters.set(key, current.filter((item) => item !== resolve));
       resolve(null);
-    }, 1800);
+    }, 2500);
   });
 }
 
@@ -306,23 +346,25 @@ async function syncFriendProfile(peer: StoredPeer): Promise<void> {
   lastProfileFetch.set(peer.code, now);
   const profile = await fetchProfile(peer);
   if (!profile?.skin && !profile?.name) return;
-  const updated = store.listFriends().map((friend) => friend.code === peer.code
-    ? {
-        ...friend,
-        name: friend.customName ? friend.name : profile.name || friend.name,
-        skin: profile.skin ?? friend.skin,
-        presence: 'online' as const,
-        lastSeen: now,
-      }
-    : friend);
-  await store.setFriends(updated);
+  await queueFriendWrite(async () => {
+    const updated = store.listFriends().map((friend) => friend.code === peer.code
+      ? {
+          ...friend,
+          name: friend.customName ? friend.name : profile.name || friend.name,
+          skin: profile.skin ?? friend.skin,
+          presence: 'online' as const,
+          lastSeen: now,
+        }
+      : friend);
+    await store.setFriends(updated);
+  });
   emitUpdate('peers');
 }
 
 function recordPeer(raw: WireRecord): StoredPeer | null {
   const record = sanitizeRecord(raw);
   if (!record || record.kind !== 'friend' && record.kind !== 'party') return null;
-  const peer: StoredPeer = { ...toWire(record), lastSeen: Date.now() };
+  const peer: StoredPeer = { ...toWire(record), skin: record.skin, lastSeen: Date.now() };
   const key = `${peer.kind}:${peer.code}`;
   const previous = peers.get(key);
   peers.set(key, peer);
@@ -349,6 +391,47 @@ function appendMessage(message: FriendMessage): Promise<void> {
 function getFriend(code: string) {
   const normalized = normalizeShortCode(code, FRIEND_PREFIX);
   return store.listFriends().find((friend) => friend.code === normalized || friend.id === normalized);
+}
+
+/** A LAN peer can start a conversation even if only the other side saved the code first. */
+async function ensureFriend(code: string, peer: StoredPeer, name: string): Promise<void> {
+  if (getFriend(code)) return;
+  await queueFriendWrite(async () => {
+    if (getFriend(code)) return;
+    const now = Date.now();
+    const friend: Friend = {
+      id: code,
+      code,
+      name: cleanText(name, 16) || peer.name,
+      accountType: peer.accountType,
+      skin: peer.skin,
+      presence: 'online',
+      addedAt: now,
+      lastSeen: now,
+      source: 'code',
+    };
+    const friends = store.listFriends();
+    await store.setFriends([friend, ...friends].slice(0, MAX_FRIENDS));
+  });
+  emitUpdate('peers');
+}
+
+/** Friend presence follows live UDP peers instead of waiting for a party chat roster. */
+async function syncFriendPresence(): Promise<void> {
+  await queueFriendWrite(async () => {
+    const friends = store.listFriends();
+    if (!friends.length) return;
+    const now = Date.now();
+    let changed = false;
+    const updated: Friend[] = friends.map((friend) => {
+      const online = peers.has(`friend:${friend.code}`);
+      const presence: Friend['presence'] = online ? 'online' : 'offline';
+      if (friend.presence === presence) return friend;
+      changed = true;
+      return { ...friend, presence, lastSeen: online ? now : friend.lastSeen };
+    });
+    if (changed) await store.setFriends(updated);
+  });
 }
 
 function handleCall(message: Record<string, unknown>): void {
@@ -379,6 +462,7 @@ function handleCall(message: Record<string, unknown>): void {
 
 function handleDirect(message: Record<string, unknown>): void {
   if (message.instanceId === INSTANCE_ID) return;
+  if (alreadySeen(message)) return;
   const to = cleanText(message.to, 32);
   const isMine = normalizeShortCode(to, FRIEND_PREFIX) === myCode()
     || localRecords().some((record) => record.kind === 'party'
@@ -389,10 +473,12 @@ function handleDirect(message: Record<string, unknown>): void {
     const kind = message.kind === 'party' ? 'party' : 'friend';
     const requested = normalizeShortCode(to, kind === 'party' ? PARTY_PREFIX : FRIEND_PREFIX);
     const record = localRecords().find((item) => item.kind === kind && item.code === requested);
+    const replyHosts = targetHosts(message.replyHosts);
     const replyHost = cleanHost(message.replyHost);
+    if (replyHost && !replyHosts.includes(replyHost)) replyHosts.unshift(replyHost);
     const replyPort = cleanPort(message.replyPort);
-    if (record && replyHost && replyPort) {
-      sendDirect({ ...record, host: replyHost, profilePort: replyPort }, {
+    if (record && replyHosts.length && replyPort) {
+      sendDirect({ ...record, host: replyHosts[0], hosts: replyHosts, profilePort: replyPort }, {
         t: 'profileResult',
         kind,
         to: message.from,
@@ -422,17 +508,18 @@ function handleDirect(message: Record<string, unknown>): void {
   }
   if (t === 'chat') {
     const from = normalizeShortCode(cleanText(message.from, 32), FRIEND_PREFIX);
-    if (!from || !getFriend(from)) return;
-    void appendMessage({
-      id: randomUUID(),
+    const peer = peers.get(`friend:${from}`);
+    if (!from || !peer) return;
+    void ensureFriend(from, peer, cleanText(message.author, 16)).then(() => appendMessage({
+      id: cleanText(message.id, 80) || randomUUID(),
       friendCode: from,
       authorCode: from,
-      author: cleanText(message.author, 16) || from,
+      author: cleanText(message.author, 16) || peer.name || from,
       text: cleanText(message.text, 500),
       createdAt: Date.now(),
       kind: 'chat',
       outgoing: false,
-    });
+    }));
     return;
   }
   if (t === 'call') {
@@ -442,12 +529,13 @@ function handleDirect(message: Record<string, unknown>): void {
 
 function handleUdp(message: Record<string, unknown>): void {
   if (message.instanceId === INSTANCE_ID) return;
+  if (alreadySeen(message)) return;
   if (message.t === 'announce' && Array.isArray(message.records)) {
     for (const raw of message.records) recordPeer(raw as WireRecord);
     return;
   }
   if (message.t === 'query') {
-    sendAnnounce(typeof message.code === 'string' ? message.code : undefined);
+    sendAnnounce(typeof message.code === 'string' ? message.code : undefined, true);
     return;
   }
   if (message.t === 'voice') {
@@ -502,12 +590,16 @@ export function startDiscovery(): void {
     try {
       udp?.setBroadcast(true);
     } catch {
-      // Some virtual adapters reject broadcast; discovery still works on the rest.
+      // Some adapters reject broadcast; unicast and the other adapters still work.
     }
-    sendAnnounce();
+    // Wait for the ephemeral TCP channel to finish binding before announcing it.
+    setTimeout(() => sendAnnounce(undefined, true), 150);
+    let ticks = 0;
     announceTimer = setInterval(() => {
-      sendAnnounce();
+      ticks += 1;
+      sendAnnounce(undefined, ticks % 8 === 0);
       prunePeers();
+      void syncFriendPresence();
     }, ANNOUNCE_INTERVAL);
   });
 }
@@ -551,11 +643,13 @@ export function messagesFor(friendCode: string): FriendMessage[] {
   return store.listFriendMessages().filter((message) => message.friendCode === code);
 }
 
-function requireFriendPeer(code: string): StoredPeer {
+async function requireFriendPeer(code: string): Promise<StoredPeer> {
   const normalized = normalizeShortCode(code, FRIEND_PREFIX);
-  const peer = peers.get(`friend:${normalized}`);
-  if (!peer) throw new Error('That friend is not on this LAN right now');
-  return peer;
+  const existing = peers.get(`friend:${normalized}`);
+  if (existing) return existing;
+  const found = await waitForPeer('friend', normalized, 4000);
+  if (!found) throw new Error('That friend is not on this LAN right now');
+  return found;
 }
 
 async function waitForPeer(kind: WireRecord['kind'], code: string, timeoutMs: number): Promise<StoredPeer | null> {
@@ -579,14 +673,14 @@ async function waitForPeer(kind: WireRecord['kind'], code: string, timeoutMs: nu
     events.on('friends', handler);
     off = () => { events.off('friends', handler); };
     const timer = setTimeout(() => finish(null), timeoutMs);
-    sendUdp({ t: 'query', kind, code });
+    sendUdp({ t: 'query', kind, code }, undefined, true);
   });
 }
 
 export async function resolveFriendPeer(code: string): Promise<FriendPeer | null> {
   const normalized = normalizeShortCode(code, FRIEND_PREFIX);
   if (!verifyShortCode(normalized, FRIEND_PREFIX)) throw new Error('This friend code is damaged or was changed');
-  const peer = await waitForPeer('friend', normalized, 2500);
+  const peer = await waitForPeer('friend', normalized, 5000);
   if (!peer) return null;
   const profile = await fetchProfile(peer);
   return {
@@ -603,7 +697,7 @@ export async function resolveFriendPeer(code: string): Promise<FriendPeer | null
 export async function resolvePartyInvite(code: string): Promise<string> {
   const normalized = normalizeShortCode(code, PARTY_PREFIX);
   if (!verifyShortCode(normalized, PARTY_PREFIX)) throw new Error('That is not a valid short party code');
-  const peer = await waitForPeer('party', normalized, 2200);
+  const peer = await waitForPeer('party', normalized, 6000);
   if (!peer) {
     throw new Error('No host with that code was found on this LAN. Keep the party open and join from the same network.');
   }
@@ -613,7 +707,7 @@ export async function resolvePartyInvite(code: string): Promise<string> {
 }
 
 export async function sendChat(friendCode: string, text: string, author: string): Promise<void> {
-  const peer = requireFriendPeer(friendCode);
+  const peer = await requireFriendPeer(friendCode);
   const clean = text.trim().slice(0, 500);
   if (!clean) throw new Error('Type a message first');
   const from = myCode();
@@ -630,6 +724,7 @@ export async function sendChat(friendCode: string, text: string, author: string)
   };
   await appendMessage(message);
   sendDirect(peer, {
+    id: message.id,
     t: 'chat',
     to: peer.code,
     from,
@@ -639,7 +734,7 @@ export async function sendChat(friendCode: string, text: string, author: string)
 }
 
 export async function startFriendCall(friendCode: string): Promise<FriendCallEvent> {
-  const peer = requireFriendPeer(friendCode);
+  const peer = await requireFriendPeer(friendCode);
   if (calls.has(peer.code)) throw new Error('A call with this friend is already active');
   const callId = randomUUID();
   calls.set(peer.code, { callId, state: 'ringing', incoming: false });
@@ -653,7 +748,7 @@ export async function acceptFriendCall(friendCode: string, callId: string): Prom
   const code = normalizeShortCode(friendCode, FRIEND_PREFIX);
   const session = calls.get(code);
   if (!session || session.callId !== callId) throw new Error('That call is no longer available');
-  const peer = requireFriendPeer(code);
+  const peer = await requireFriendPeer(code);
   session.state = 'connected';
   sendDirect(peer, { t: 'call', action: 'accept', to: code, from: myCode(), callId });
 }
@@ -680,11 +775,14 @@ export async function endFriendCall(friendCode: string): Promise<void> {
 export async function sendVoice(friendCode: string, pcm: string, callId: string): Promise<void> {
   const code = normalizeShortCode(friendCode, FRIEND_PREFIX);
   const session = calls.get(code);
-  const peer = requireFriendPeer(code);
+  const peer = await requireFriendPeer(code);
   if (!session || session.state !== 'connected' || session.callId !== callId) {
     throw new Error('Start or accept the call before speaking');
   }
-  sendUdp({ t: 'voice', to: code, from: myCode(), callId, pcm: pcm.slice(0, 32_000) }, peer.host);
+  sendUdp(
+    { t: 'voice', to: code, from: myCode(), callId, pcm: pcm.slice(0, 32_000) },
+    peer.hosts?.length ? peer.hosts : peer.host,
+  );
 }
 
 export function isCallConnected(friendCode: string): boolean {

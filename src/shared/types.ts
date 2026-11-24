@@ -203,6 +203,8 @@ export interface Party {
   serverPort?: number;
   /** Address of this launcher's direct chat relay. */
   chatHost?: string;
+  /** All real LAN addresses of the relay host; guests try each without VPN. */
+  chatHosts?: string[];
   chatPort?: number;
   minecraftVersion: string;
   loader: ModLoader;
@@ -232,6 +234,7 @@ export interface PartyInvite {
   serverPort?: number;
   /** Address of the launcher-hosted chat relay; v2 invites include it. */
   chatHost?: string;
+  chatHosts?: string[];
   chatPort?: number;
   minecraftVersion: string;
   loader: ModLoader;

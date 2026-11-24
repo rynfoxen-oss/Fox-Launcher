@@ -3,6 +3,7 @@ import { app } from 'electron';
 import * as fs from 'fs';
 import * as net from 'net';
 import * as path from 'path';
+import { offlineUuid } from './auth';
 import { chooseJavaPath, getLoaderVersions } from './minecraft';
 import { listInstalledMods } from './mods';
 import { lanPartyAddresses, localPartyAddress } from './partyNetwork';
@@ -98,7 +99,7 @@ async function assertPortFree(port: number): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const probe = net.createServer();
     probe.once('error', (error) => reject(new Error(`Port ${port} is already in use: ${error.message}`)));
-    probe.listen(port, '127.0.0.1', () => probe.close(() => resolve()));
+    probe.listen(port, '0.0.0.0', () => probe.close(() => resolve()));
   });
 }
 
@@ -167,6 +168,37 @@ async function discoverServerJar(serverDir: string, loader: Instance['loader']):
   return path.join(serverDir, jar);
 }
 
+/**
+ * Offline/Fox ID players use name-derived UUIDs. Keep a current allow list for
+ * diagnostics and older plugins, but leave vanilla whitelist enforcement off so
+ * invited players never get "not whitelisted" on the launcher-hosted server.
+ */
+async function writePartyAccessFiles(party: Party, serverDir: string): Promise<void> {
+  const names = new Map<string, string>();
+  for (const member of party.members ?? []) {
+    const name = oneLine(member.name, 16);
+    if (name) names.set(name.toLowerCase(), name);
+  }
+  const account = store.currentAccount();
+  if (account?.name) names.set(account.name.toLowerCase(), oneLine(account.name, 16));
+
+  const entries = [...names.values()].map((name) => ({
+    uuid: offlineUuid(name).replace(/-/g, ''),
+    name,
+  }));
+  await fs.promises.writeFile(
+    path.join(serverDir, 'whitelist.json'),
+    `${JSON.stringify(entries, null, 2)}\n`,
+    'utf8',
+  );
+  await fs.promises.writeFile(
+    path.join(serverDir, 'white-list.txt'),
+    entries.length ? `${entries.map((entry) => entry.name).join('\n')}\n` : '',
+    'utf8',
+  );
+  pushLogLine(`[fox] Offline access enabled for ${entries.length} party player(s); whitelist enforcement is off.`);
+}
+
 async function prepareServer(party: Party, expectedGeneration: number): Promise<ServerPlan> {
   const instance = store.get().instances.find((item) => item.id === party.instanceId);
   if (!instance) throw new Error('Choose an instance for this party');
@@ -215,6 +247,10 @@ async function prepareServer(party: Party, expectedGeneration: number): Promise<
   const properties = [
     `server-port=${GAME_PORT}`,
     'online-mode=false',
+    // Offline players must never be rejected by a stale or copied allow list.
+    'white-list=false',
+    'whitelist=false',
+    'enforce-whitelist=false',
     `motd=${oneLine(`Fox Party - ${party.name}`, 60)}`,
     'max-players=40',
     'allow-flight=true',
@@ -223,6 +259,7 @@ async function prepareServer(party: Party, expectedGeneration: number): Promise<
     'enable-rcon=false',
   ].join('\n');
   await fs.promises.writeFile(path.join(serverDir, 'server.properties'), `${properties}\n`, 'utf8');
+  await writePartyAccessFiles(party, serverDir);
 
   const names = await fs.promises.readdir(serverDir).catch(() => [] as string[]);
   if (process.platform === 'win32' && names.includes('run.bat')) {

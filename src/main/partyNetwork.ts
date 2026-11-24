@@ -1,4 +1,3 @@
-import * as dgram from 'dgram';
 import * as os from 'os';
 
 export interface PartyAddresses {
@@ -10,29 +9,117 @@ export interface PartyAddresses {
   message: string;
 }
 
-/** Finds the local address used for outbound routes without sending any data. */
+/** Virtual adapters are not LAN interfaces, even when Windows gives them a private-looking IP. */
+const VIRTUAL_ADAPTER = /vpn|radmin|hamachi|zerotier|tailscale|wireguard|openvpn|tun|tap|virtualbox|vmware|hyper-v|vethernet|docker|^local area connection\*/i;
+const MAX_HOSTS = 12;
+
+interface NetworkInterface {
+  name: string;
+  address: string;
+  bits: number;
+}
+
+function parseIp(value: string): number {
+  const parts = value.split('.').map(Number);
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return 0;
+  return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
+}
+
+function formatIp(value: number): string {
+  return [
+    (value >>> 24) & 255,
+    (value >>> 16) & 255,
+    (value >>> 8) & 255,
+    value & 255,
+  ].join('.');
+}
+
+function maskFor(bits: number): number {
+  return bits === 0 ? 0 : (~((1 << (32 - bits)) - 1)) >>> 0;
+}
+
+function isPrivateLan(value: number): boolean {
+  const address = value >>> 0;
+  const inRange = (base: string, bits: number) => {
+    const network = parseIp(base) >>> 0;
+    const mask = maskFor(bits) >>> 0;
+    return (address & mask) === (network & mask);
+  };
+  return inRange('10.0.0.0', 8)
+    || inRange('172.16.0.0', 12)
+    || inRange('192.168.0.0', 16);
+}
+
+function isLinkLocal(value: number): boolean {
+  return (((value >>> 0) & 0xffff0000) >>> 0) === 0xa9fe0000;
+}
+
+function lanInterfaces(): NetworkInterface[] {
+  const found: NetworkInterface[] = [];
+  for (const [name, addresses] of Object.entries(os.networkInterfaces())) {
+    if (VIRTUAL_ADAPTER.test(name)) continue;
+    for (const item of addresses ?? []) {
+      if (item.family !== 'IPv4' || item.internal || !item.cidr) continue;
+      const [address, bitsText] = item.cidr.split('/');
+      const bits = Number(bitsText);
+      const value = parseIp(address ?? '');
+      if (!value || !Number.isInteger(bits) || bits < 1 || bits > 30) continue;
+      if (!isPrivateLan(value) && !isLinkLocal(value)) continue;
+      found.push({ name, address: address!, bits });
+    }
+  }
+  // Prefer normal private LANs; APIPA is only a fallback for ad-hoc connections.
+  return found.sort((left, right) => {
+    const leftScore = isPrivateLan(parseIp(left.address)) ? 0 : 1;
+    const rightScore = isPrivateLan(parseIp(right.address)) ? 0 : 1;
+    return leftScore - rightScore;
+  });
+}
+
+/** Every real LAN address this device can advertise. Never includes VPN adapters. */
+export function lanHostAddresses(): string[] {
+  const hosts: string[] = [];
+  for (const item of lanInterfaces()) {
+    if (!hosts.includes(item.address)) hosts.push(item.address);
+    if (hosts.length >= MAX_HOSTS) break;
+  }
+  return hosts;
+}
+
+/** Finds the primary LAN address without probing the internet or choosing a VPN adapter. */
 export function localPartyAddress(): string {
-  const socket = dgram.createSocket('udp4');
-  try {
-    socket.connect(80, '198.51.100.1');
-    const address = socket.address();
-    if (address && typeof address === 'object' && address.address && !address.address.startsWith('127.')) {
-      return address.address;
-    }
-  } catch {
-    // Fall through to interface enumeration below.
-  } finally {
-    try {
-      socket.close();
-    } catch {
-      // The socket may never have bound if the route probe was rejected.
+  return lanHostAddresses()[0] ?? '127.0.0.1';
+}
+
+/** Directed broadcast for each LAN, plus the global broadcast for permissive adapters. */
+export function lanBroadcastTargets(): string[] {
+  const targets = new Set<string>(['255.255.255.255']);
+  for (const item of lanInterfaces()) {
+    const value = parseIp(item.address);
+    const broadcast = (value | (maskFor(item.bits) ^ 0xffffffff)) >>> 0;
+    targets.add(formatIp(broadcast));
+  }
+  return [...targets];
+}
+
+/**
+ * Local subnet unicast fallback for networks that filter broadcast or client isolation.
+ * Only the /24 around this device is swept; nothing is routed through a router or VPN.
+ */
+export function lanUnicastTargets(): string[] {
+  const targets = new Set<string>();
+  const own = new Set(lanHostAddresses());
+  for (const item of lanInterfaces()) {
+    const value = parseIp(item.address);
+    const network = value & maskFor(Math.max(item.bits, 24)) >>> 0;
+    for (let offset = 1; offset < 255; offset += 1) {
+      const target = ((network >>> 0) + offset) >>> 0;
+      const address = formatIp(target);
+      if (own.has(address) || targets.has(address)) continue;
+      targets.add(address);
     }
   }
-  for (const addresses of Object.values(os.networkInterfaces())) {
-    const found = addresses?.find((item) => item.family === 'IPv4' && !item.internal);
-    if (found) return found.address;
-  }
-  return '127.0.0.1';
+  return [...targets];
 }
 
 /**
@@ -40,7 +127,8 @@ export function localPartyAddress(): string {
  * so remote play requires the user's own network configuration outside the app.
  */
 export function lanPartyAddresses(gamePort: number, chatPort: number): PartyAddresses {
-  const address = localPartyAddress();
+  const hosts = lanHostAddresses();
+  const address = hosts[0] ?? '127.0.0.1';
   return {
     host: address,
     port: gamePort,

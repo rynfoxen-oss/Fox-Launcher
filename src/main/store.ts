@@ -1,7 +1,7 @@
 import { app } from 'electron';
 import { promises as fs } from 'fs';
 import * as path from 'path';
-import { inferSkinModel } from './auth';
+import { inferSkinModel, offlineUuid } from './auth';
 import type {
   Account,
   CapeEntry,
@@ -101,6 +101,39 @@ function deepMerge<T>(base: T, patch: unknown): T {
   return output as T;
 }
 
+function repairAccounts(value: unknown): Account[] {
+  if (!Array.isArray(value)) return [];
+  const accounts: Account[] = [];
+  for (const raw of value) {
+    if (!isPlainObject(raw)) continue;
+    const name = typeof raw.name === 'string' ? raw.name.trim().slice(0, 16) : '';
+    if (!name) continue;
+    const type = raw.type === 'microsoft' ? 'microsoft' : 'offline';
+    const uuid = typeof raw.uuid === 'string' && /^[a-f0-9]{32}$/i.test(raw.uuid)
+      ? raw.uuid.toLowerCase()
+      : offlineUuid(name).replace(/-/g, '');
+    const id = typeof raw.id === 'string' && raw.id.trim()
+      ? raw.id
+      : `${type}-${uuid}`;
+    const email = typeof raw.email === 'string' && raw.email.includes('@')
+      ? raw.email.trim().toLowerCase()
+      : undefined;
+    accounts.push({
+      ...raw,
+      id,
+      name,
+      type,
+      uuid,
+      email,
+      accessToken: typeof raw.accessToken === 'string' && raw.accessToken
+        ? raw.accessToken
+        : `offline.${uuid}`,
+      lastUsed: typeof raw.lastUsed === 'number' && Number.isFinite(raw.lastUsed) ? raw.lastUsed : Date.now(),
+    } as Account);
+  }
+  return accounts;
+}
+
 class Store {
   private data: LauncherData = defaultData();
   private writeChain: Promise<void> = Promise.resolve();
@@ -153,10 +186,14 @@ class Store {
           }
         }
       }
+      const accounts = repairAccounts(parsed.accounts);
+      const selectedAccountId = accounts.some((account) => account.id === parsed.selectedAccountId)
+        ? parsed.selectedAccountId
+        : [...accounts].sort((left, right) => right.lastUsed - left.lastUsed)[0]?.id;
       this.data = {
         settings,
         instances: Array.isArray(parsed.instances) ? parsed.instances : [],
-        accounts: Array.isArray(parsed.accounts) ? parsed.accounts : [],
+        accounts,
         skins: Array.isArray(parsed.skins) ? parsed.skins : [],
         capes: Array.isArray(parsed.capes) ? parsed.capes : [],
         offlineSkins: Array.isArray(parsed.offlineSkins) ? parsed.offlineSkins : [],
@@ -166,16 +203,22 @@ class Store {
         party: isPlainObject(parsed.party) ? parsed.party as unknown as Party : null,
         friends: Array.isArray(parsed.friends) ? parsed.friends as unknown as Friend[] : [],
         friendMessages: Array.isArray(parsed.friendMessages) ? parsed.friendMessages as unknown as FriendMessage[] : [],
-        selectedAccountId: parsed.selectedAccountId,
+        selectedAccountId,
       };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         console.error('[Store] Failed to read data file, starting fresh:', error);
       }
       this.data = defaultData();
-      await this.save();
+      await this.save().catch((error) => {
+        console.error('[Store] Failed to create data file:', error);
+      });
     }
     await this.repairSkinModels();
+    // Persist repaired accounts and selection immediately so sign-in survives a restart.
+    await this.save().catch((error) => {
+      console.error('[Store] Failed to save repaired data:', error);
+    });
   }
 
   /**
@@ -229,14 +272,15 @@ class Store {
 
   async save(): Promise<void> {
     const snapshot = JSON.stringify(this.data, null, 2);
-    this.writeChain = this.writeChain.then(async () => {
+    // Do not swallow write failures: the account or party UI must be able to
+    // report that nothing was saved. A failed write must not poison future ones.
+    const operation = this.writeChain.catch(() => undefined).then(async () => {
       const temp = `${this.file}.tmp`;
       await fs.writeFile(temp, snapshot, 'utf8');
       await fs.rename(temp, this.file);
-    }).catch((error) => {
-      console.error('[Store] Failed to save:', error);
     });
-    await this.writeChain;
+    this.writeChain = operation;
+    await operation;
   }
 
   getLaunchSnapshot(instanceId: string): LaunchSnapshot | null {

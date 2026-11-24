@@ -1,3 +1,27 @@
+# Fox Launcher 1.2.5
+
+This is a stability hotfix for 1.2.4. LAN friends, party chat, and hosted servers keep working without VPN; friends outside the LAN still need a VPN or manual network setup you control. No third-party tunnel, hosted chat service, or router port opening is used.
+
+## What's fixed
+
+- **No VPN needed on the same LAN:** LAN addresses are chosen from real physical adapters only, so Radmin/VPN, VirtualBox, and other virtual interfaces are never advertised to friends.
+- **More reliable friend chat:** launchers now publish every LAN address, retry direct chat across each one, and use a same-subnet unicast fallback when broadcast is filtered. A friend can message you even if only one side saved the code first; the conversation and online presence are saved automatically.
+- **Party chat retries every LAN address:** short `FOXP-` invites carry all LAN chat hosts, and guests try each one before giving up. Short codes remain `FOXP-XXXXXX`; friend codes remain `FOX-XXXXXX`.
+- **No more "not whitelisted" on hosted servers:** launcher-created servers now explicitly disable both legacy and modern whitelist enforcement and write an offline UUID access file for the party roster.
+- **Fox ID save and login:** account data, selected account, and salted password verifiers are repaired and persisted on startup; failed disk writes are now reported instead of silently ignored.
+- **Duplicate game launches:** rapid double-clicks can no longer start two JVMs for the same instance, which previously made both processes fight over `logs/latest.log` and crash.
+- **LWJGL startup crash:** 64-bit Windows now ignores 32-bit native JARs, so `lwjgl.dll` is no longer overwritten with an incompatible library on modern Minecraft versions.
+- **Party access:** accounts signed in with Microsoft email can create or join a party; offline/cracked accounts whose got sign up with email and password can join. they need to create a name too.
+
+## Downloads
+
+- Windows: `Fox.Launcher.Setup.1.2.5.exe`
+- macOS — Apple Silicon: `Fox-Launcher-1.2.5-mac-arm64.zip`
+- macOS — Intel: `Fox-Launcher-1.2.5-mac-x64.zip`
+- macOS — guided installer: `Fox-Launcher-1.2.5-mac-setup.zip`
+
+## Previous release
+
 # Fox Launcher 1.2.4
 
 This release adds local friend chat, voice calls, short codes, and direct host-created party servers. Everything stays on your LAN unless you explicitly use your own VPN or manual setup. No third-party tunnel, hosted chat service, or router port opening is used.

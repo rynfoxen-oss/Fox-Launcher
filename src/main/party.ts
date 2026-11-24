@@ -22,7 +22,7 @@ import {
   stopPartyChat,
 } from './partyChat';
 import { currentPartyMember, publicPartyMember } from './partyIdentity';
-import { localPartyAddress } from './partyNetwork';
+import { lanHostAddresses, localPartyAddress } from './partyNetwork';
 import { serverStatus, startPartyServer, stopPartyServer } from './partyServer';
 import { store } from './store';
 import type {
@@ -189,6 +189,9 @@ function decodeInvite(inviteCode: string): PartyInvite {
   const chatAddress = rawInvite.chatHost
     ? normalizeAddress(rawInvite.chatHost, rawInvite.chatPort)
     : { host: undefined, port: undefined };
+  const chatHosts = Array.isArray(rawInvite.chatHosts)
+    ? rawInvite.chatHosts.map((host) => cleanText(host, 253, 'Chat address')).filter(Boolean).slice(0, 12)
+    : [];
 
   return {
     version: INVITE_VERSION,
@@ -198,6 +201,9 @@ function decodeInvite(inviteCode: string): PartyInvite {
     serverHost: address.host,
     serverPort: address.port,
     chatHost: chatAddress.host,
+    chatHosts: chatAddress.host && !chatHosts.includes(chatAddress.host)
+      ? [chatAddress.host, ...chatHosts]
+      : chatHosts,
     chatPort: chatAddress.port,
     minecraftVersion: cleanText(rawInvite.minecraftVersion, 40, 'Minecraft version'),
     loader,
@@ -223,6 +229,7 @@ function partyToInvite(party: Party): PartyInvite {
     serverHost: party.serverHost,
     serverPort: party.serverPort,
     chatHost: party.chatHost,
+    chatHosts: party.chatHosts,
     chatPort: party.chatPort,
     minecraftVersion: party.minecraftVersion,
     loader: party.loader,
@@ -432,9 +439,11 @@ export async function createParty(input: PartyCreateInput): Promise<Party> {
     const current = store.get().party;
     if (!current || current.id !== party.id) return;
     const useRemote = Boolean(current.remoteAddress);
+    const lanHosts = lanHostAddresses();
     const updated: Party = useRemote
       ? {
           ...current,
+          chatHosts: current.chatHost ? [current.chatHost] : current.chatHosts,
           chat: {
             ...current.chat,
             status: 'connected',
@@ -448,6 +457,7 @@ export async function createParty(input: PartyCreateInput): Promise<Party> {
           serverHost: hostAddress,
           serverPort: port,
           chatHost,
+          chatHosts: chatHost && !lanHosts.includes(chatHost) ? [chatHost, ...lanHosts] : lanHosts,
           chatPort,
           join: { host: hostAddress, port },
           chat: { status: 'connected', message: 'Direct party chat is running on this device.', address: `${chatHost}:${chatPort}` },
@@ -471,6 +481,7 @@ export async function createParty(input: PartyCreateInput): Promise<Party> {
       const updated: Party = {
         ...current,
         chatHost,
+        chatHosts: lanHostAddresses(),
         chatPort,
         chat: { status: 'connected', message: 'Direct party chat is running on this device.', address: `${chatHost}:${chatPort}` },
         inviteCode: '',
@@ -507,6 +518,7 @@ export async function joinParty(inviteCode: string, preferredInstanceId?: string
     serverHost: invite.serverHost,
     serverPort: invite.serverPort,
     chatHost: invite.chatHost,
+    chatHosts: invite.chatHosts,
     chatPort: invite.chatPort,
     minecraftVersion: invite.minecraftVersion,
     loader: invite.loader,
@@ -600,6 +612,7 @@ export async function setPartyRemoteAddress(address: string, chatPort?: number):
     serverHost: target.host,
     serverPort: target.port,
     chatHost: target.host,
+    chatHosts: [target.host],
     chatPort: remoteChatPort,
     remoteAddress,
     join: { host: target.host, port: target.port },

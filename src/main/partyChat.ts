@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import * as net from 'net';
 import { FRIEND_PREFIX, normalizeShortCode, verifyShortCode } from './codes';
 import { events } from './events';
-import { localPartyAddress } from './partyNetwork';
+import { lanHostAddresses, localPartyAddress } from './partyNetwork';
 import { publicPartyMember } from './partyIdentity';
 import type {
   Party,
@@ -308,7 +308,7 @@ export async function startPartyHub(
   try {
     const port = await listenHub(party.chatPort || 25566, expectedGeneration);
     if (expectedGeneration !== generation) return port;
-    status.address = `${localPartyAddress()}:${port}`;
+    status.address = `${lanHostAddresses()[0] ?? localPartyAddress()}:${port}`;
     emit('state');
     return port;
   } catch (error) {
@@ -334,55 +334,100 @@ function scheduleReconnect(expectedGeneration: number): void {
   }, RECONNECT_DELAY);
 }
 
+function oneLineError(error?: Error): string {
+  return (error?.message ?? '').replace(/[\r\n]+/g, ' ').trim().slice(0, 160);
+}
+
 function openClient(expectedGeneration: number): void {
   if (!config) return;
   const { party, self: localSelf } = config;
-  const host = party.chatHost;
   const port = party.chatPort;
-  if (!host || !port) {
+  const hosts = [...new Set(
+    [party.chatHost, ...(party.chatHosts ?? [])].filter((host): host is string => Boolean(host)),
+  )];
+  if (!hosts.length || !port) {
     status = { status: 'error', message: 'This invite does not include a chat address.', onlineCount: countOnline() };
     emit('state');
     return;
   }
 
-  status = {
-    status: reconnectAttempts ? 'connecting' : 'connecting',
-    message: reconnectAttempts ? 'Reconnecting to the host’s party chat…' : 'Connecting to the host’s party chat…',
-    address: `${host}:${port}`,
-    onlineCount: countOnline(),
-  };
-  emit('state');
-
-  const socket = net.connect({ host, port });
-  client = socket;
-  socket.setEncoding('utf8');
-  let buffer = '';
-
-  socket.on('connect', () => {
-    if (expectedGeneration !== generation) return;
-    writeJson(socket, { type: 'hello', partyId, member: localSelf });
-  });
-  socket.on('data', (chunk: string) => {
-    if (expectedGeneration !== generation) return;
-    buffer += chunk;
-    let index = buffer.indexOf('\n');
-    while (index >= 0) {
-      const line = buffer.slice(0, index).trim();
-      buffer = buffer.slice(index + 1);
-      index = buffer.indexOf('\n');
-      processLine(line, 'client');
+  let index = 0;
+  const tryNext = (lastError = ''): void => {
+    if (expectedGeneration !== generation || stopping || !config) return;
+    if (index >= hosts.length) {
+      status = {
+        status: 'error',
+        message: lastError
+          ? `Could not reach the host’s chat on the LAN: ${lastError}`
+          : 'Could not reach the host’s chat on the LAN.',
+        onlineCount: countOnline(),
+      };
+      emit('state');
+      scheduleReconnect(expectedGeneration);
+      return;
     }
-    if (buffer.length > MAX_LINE_LENGTH) buffer = '';
-  });
-  const disconnected = () => {
-    if (client === socket) client = null;
-    if (expectedGeneration !== generation || stopping) return;
-    status = { status: 'error', message: 'Chat disconnected. Retrying…', onlineCount: countOnline() };
+
+    const host = hosts[index];
+    index += 1;
+    status = {
+      status: 'connecting',
+      message: reconnectAttempts ? 'Reconnecting to the host’s party chat…' : 'Connecting to the host’s party chat…',
+      address: `${host}:${port}`,
+      onlineCount: countOnline(),
+    };
     emit('state');
-    scheduleReconnect(expectedGeneration);
+
+    const socket = net.connect({ host, port });
+    client = socket;
+    socket.setEncoding('utf8');
+    let buffer = '';
+    let connected = false;
+    let settled = false;
+
+    socket.on('connect', () => {
+      if (expectedGeneration !== generation) return;
+      connected = true;
+      reconnectAttempts = 0;
+      writeJson(socket, { type: 'hello', partyId, member: localSelf });
+    });
+    socket.on('data', (chunk: string) => {
+      if (expectedGeneration !== generation) return;
+      buffer += chunk;
+      let newline = buffer.indexOf('\n');
+      while (newline >= 0) {
+        const line = buffer.slice(0, newline).trim();
+        buffer = buffer.slice(newline + 1);
+        newline = buffer.indexOf('\n');
+        processLine(line, 'client');
+      }
+      if (buffer.length > MAX_LINE_LENGTH) buffer = '';
+    });
+    const failed = (error?: Error): void => {
+      if (settled) return;
+      settled = true;
+      if (client === socket) client = null;
+      socket.destroy();
+      if (connected) return;
+      tryNext(oneLineError(error) || lastError);
+    };
+    const disconnected = (): void => {
+      if (settled) return;
+      settled = true;
+      if (client === socket) client = null;
+      if (expectedGeneration !== generation || stopping) return;
+      if (!connected) {
+        tryNext(lastError);
+        return;
+      }
+      status = { status: 'error', message: 'Chat disconnected. Retrying…', onlineCount: countOnline() };
+      emit('state');
+      scheduleReconnect(expectedGeneration);
+    };
+    socket.on('error', failed);
+    socket.on('close', disconnected);
   };
-  socket.on('close', disconnected);
-  socket.on('error', disconnected);
+
+  tryNext();
 }
 
 export function connectPartyHub(
